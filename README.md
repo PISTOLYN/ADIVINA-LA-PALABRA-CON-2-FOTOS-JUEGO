@@ -1,36 +1,26 @@
-# Adivina la Palabra con 2 Fotos
+# Adivina la Palabra con 2 Fotos — Desafíos Locos
 
-Juego web de concursos para **Desafíos Locos**, compatible con GitHub Pages. Está construido en un solo archivo HTML y no necesita instalar dependencias.
+Aplicación de escritorio para Windows con instaladores x86 y x64.
 
-## Cómo publicarlo en GitHub Pages
-1. En el repositorio, abre **Settings → Pages**.
-2. En **Build and deployment**, selecciona **Deploy from a branch**.
-3. Selecciona la rama principal y la carpeta **/(root)**; guarda.
-4. Espera a que GitHub Pages publique el sitio.
+## Compatibilidad
+- Windows 10 de 32 bits: instalador x86.
+- Windows 10 de 64 bits: instalador x64.
+- Windows 11 de 64 bits: instalador x64.
 
-## Archivos e imágenes
-- Coloca las imágenes predeterminadas en la carpeta `images`.
-- Primera foto: `images/foto1.jpg`
-- Segunda foto: `images/foto2.jpg`
-- Logo opcional: `images/logo-desafios-locos.png`
-
-También puedes cambiar las dos fotografías directamente desde el juego: presiona **M** y selecciona los archivos de tu computadora. Para cambiar la respuesta, edita el campo **Palabra respuesta** en ese mismo menú. Los archivos seleccionados desde el menú se cargan en el navegador y no se guardan automáticamente en GitHub.
+Los instaladores incluyen la aplicación autocontenida; no es necesario instalar .NET por separado. Crean una entrada en el menú Inicio y permiten agregar un acceso directo al escritorio.
 
 ## Controles
-- **ENTER**: iniciar una ronda de 10 segundos.
-- **Q**: pulsador del Equipo Rojo.
-- **P**: pulsador del Equipo Azul.
-- **M**: abrir o cerrar configuración.
-- **ESC**: reiniciar el estado de los pulsadores.
+- ENTER: iniciar ronda de 10 segundos.
+- Q: pulsador del Equipo Rojo.
+- P: pulsador del Equipo Azul.
+- M: configuración de fotografías, respuesta y MP3.
+- ESC: reiniciar pulsadores.
+- GANA ROJO / GANA AZUL: asignar punto.
 
-El primer equipo que pulse Q o P detiene el reloj y obtiene el derecho a responder. El otro equipo queda bloqueado durante esa ronda.
+## Obtener los instaladores
+Abre la pestaña Actions del repositorio, selecciona el flujo "Compilar instaladores Windows" y descarga el artefacto "Instaladores-AdivinaLaPalabra-Windows" cuando termine correctamente.
 
-## Audios de celebración
-En el menú de configuración (M), selecciona un MP3 para cada botón de celebración. Los audios se asignan en el navegador actual; vuelve a cargarlos si abres el juego en otro dispositivo o navegador.
+Copia el instalador a una memoria USB y ejecútalo en cada computadora. Usa x86 para Windows de 32 bits y x64 para Windows de 64 bits.
 
-## Marcadores
-- **GANA ROJO / GANA AZUL**: suma un punto al equipo y reinicia el estado de la ronda.
-- **PUNTO +**: suma un punto sin reiniciar la ronda.
-- **REINICIAR PULSADORES**: detiene el reloj y deja la ronda lista para volver a iniciar con ENTER.
-
-> Nota: el botón SALIR detiene la ronda; por las restricciones de los navegadores, la página no puede cerrar una pestaña que el usuario abrió manualmente.
+## Tecnología
+C# Windows Forms, .NET 8 autocontenido y NAudio para reproducir MP3.
