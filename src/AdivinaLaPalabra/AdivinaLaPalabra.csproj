@@ -13,5 +13,10 @@
   <Content Include="../../FONDO 5.jpg" Link="FONDO 5.jpg" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../FONDO 6.jpg" Link="FONDO 6.jpg" CopyToOutputDirectory="PreserveNewest" />
   <Content Include="../../CRONOMETRO.png" Link="CRONOMETRO.png" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../BARRA DE BOTONES.jpg" Link="BARRA DE BOTONES.jpg" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../PANTALLA LEDS.jpg" Link="PANTALLA LEDS.jpg" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../MARCO ROJO PNG.png" Link="MARCO ROJO PNG.png" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../MARCO AZUL PNG.png" Link="MARCO AZUL PNG.png" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../SIGNO MAS PNG.png" Link="SIGNO MAS PNG.png" CopyToOutputDirectory="PreserveNewest" />
 </ItemGroup>
 </Project>
