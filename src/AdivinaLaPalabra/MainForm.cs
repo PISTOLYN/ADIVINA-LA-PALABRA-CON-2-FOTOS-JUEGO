@@ -223,9 +223,9 @@ public sealed class MainForm : Form
         frame.Paint += (_, e) => { if (activeTeam != team) return; int pulse = 100 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 150); using var pen = new Pen(team == "red" ? Color.FromArgb(pulse, 255, 40, 20) : Color.FromArgb(pulse, 20, 130, 255), 8); e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; e.Graphics.DrawRectangle(pen, 4, 4, Math.Max(1, frame.Width - 9), Math.Max(1, frame.Height - 9)); };
         return frame;
     }
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; clockTicks = 0; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 10; clockTicks = 0; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · LISTOS", null); }
+    void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · LISTOS", null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); SetStatus(team == "red" ? "PUNTO PARA EQUIPO ROJO" : "PUNTO PARA EQUIPO AZUL", team); }
     void RevealAnswer() { answerRevealed = true; answerLabel.Text = scenes[currentScene].Answer; }
     void ShowScene(int index, bool startTimer)
