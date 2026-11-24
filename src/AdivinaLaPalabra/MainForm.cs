@@ -24,7 +24,7 @@ public sealed class MainForm : Form
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P;
     int seconds = 10, redPoints, bluePoints, currentScene, clockTicks;
-    bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen;
+    bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen, capturingBuzzerKey;
     FormBorderStyle oldBorder;
     Rectangle oldBounds;
 
@@ -171,6 +171,7 @@ public sealed class MainForm : Form
 
     protected override bool ProcessCmdKey(ref Message msg, Keys key)
     {
+        if (capturingBuzzerKey) return base.ProcessCmdKey(ref msg, key);
         if (key == Keys.M) { OpenSettings(); return true; }
         if (key == redBuzzerKey) { Buzz("red"); return true; }
         if (key == blueBuzzerKey) { Buzz("blue"); return true; }
@@ -207,11 +208,15 @@ public sealed class MainForm : Form
         buzzerPanel.Controls.Add(new Label { Text = "CONFIGURA QUÉ TECLA UTILIZA CADA EQUIPO", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 13), Margin = new Padding(3, 8, 3, 18) });
         var redKeyBox = new TextBox { ReadOnly = true, Text = redBuzzerKey.ToString(), Width = 90, TextAlign = HorizontalAlignment.Center, Font = new Font("Arial Black", 18), BackColor = Color.White };
         var blueKeyBox = new TextBox { ReadOnly = true, Text = blueBuzzerKey.ToString(), Width = 90, TextAlign = HorizontalAlignment.Center, Font = new Font("Arial Black", 18), BackColor = Color.White };
+        KeyEventHandler? redCaptureHandler = null, blueCaptureHandler = null;
         void CaptureKey(TextBox target, bool isRed)
         {
             target.Text = "PRESIONA...";
+            capturingBuzzerKey = true;
             target.Focus();
-            target.KeyDown += (_, e) =>
+            if (isRed && redCaptureHandler != null) target.KeyDown -= redCaptureHandler;
+            if (!isRed && blueCaptureHandler != null) target.KeyDown -= blueCaptureHandler;
+            KeyEventHandler handler = (_, e) =>
             {
                 var k = e.KeyCode;
                 bool valid = (k >= Keys.A && k <= Keys.Z) || (k >= Keys.D0 && k <= Keys.D9) || (k >= Keys.NumPad0 && k <= Keys.NumPad9);
@@ -219,8 +224,10 @@ public sealed class MainForm : Form
                 var other = isRed ? blueBuzzerKey : redBuzzerKey;
                 if (k == other) { target.Text = "YA ASIGNADA"; e.SuppressKeyPress = true; return; }
                 if (isRed) redBuzzerKey = k; else blueBuzzerKey = k;
-                target.Text = k.ToString(); e.SuppressKeyPress = true;
+                target.Text = k.ToString(); e.SuppressKeyPress = true; capturingBuzzerKey = false;
             };
+            if (isRed) redCaptureHandler = handler; else blueCaptureHandler = handler;
+            target.KeyDown += handler;
         }
         var redKeyButton = new Button { Text = "ELEGIR TECLA DEL EQUIPO ROJO", Width = 590, Height = 48, BackColor = Color.Firebrick, ForeColor = Color.White };
         redKeyButton.Click += (_, _) => CaptureKey(redKeyBox, true);
