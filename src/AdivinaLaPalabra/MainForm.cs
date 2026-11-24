@@ -16,7 +16,7 @@ public sealed class MainForm : Form
     readonly Color orange = Color.FromArgb(239, 57, 8);
     readonly Label redScore = new(), blueScore = new(), clock = new(), answerLabel = new(), sceneNumber = new(), status = new();
     readonly PictureBox photo1 = new(), photo2 = new(), logoBox = new();
-    readonly Panel redPhotoFrame = new(), bluePhotoFrame = new();
+    Panel redPhotoFrame = new(), bluePhotoFrame = new();
     readonly Panel redPanel = new(), bluePanel = new(), gamePanel = new(), startScreen = new(), winnerScreen = new();
     readonly BufferedPanel timerPanel = new();
     readonly BufferedPanel ledPanel = new();
@@ -29,7 +29,7 @@ public sealed class MainForm : Form
     Image? currentBackground, timerArtwork;
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P, resetKey = Keys.R;
-    int seconds = 10, redPoints, bluePoints, currentScene, clockTicks, timerDeciseconds;
+    int seconds = 10, redPoints, bluePoints, currentScene, timerDeciseconds;
     bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen, capturingBuzzerKey;
     FormBorderStyle oldBorder;
     Rectangle oldBounds;
