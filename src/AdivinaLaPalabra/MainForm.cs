@@ -254,13 +254,22 @@ public sealed class MainForm : Form
     void EditScene(int index, Form owner)
     {
         var s = scenes[index];
-        using var f = new Form { Text = "Editar escena " + (index + 1), StartPosition = FormStartPosition.CenterParent, Size = new Size(540, 410), BackColor = Color.FromArgb(35, 35, 42) };
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(15), WrapContents = false }; f.Controls.Add(panel);
+        using var f = new Form { Text = "Editar escena " + (index + 1), StartPosition = FormStartPosition.CenterParent, Size = new Size(560, 650), BackColor = Color.FromArgb(35, 35, 42) };
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(15), WrapContents = false, AutoScroll = true }; f.Controls.Add(panel);
         var answerBox = new TextBox { Text = s.Answer, Width = 450 };
         panel.Controls.Add(new Label { Text = "RESPUESTA (se mantiene oculta hasta presionar NOMBRE)", ForeColor = Color.White, AutoSize = true }); panel.Controls.Add(answerBox);
         var b1 = new Button { Text = "CAMBIAR FOTO 1", Width = 450, Height = 42 }; b1.Click += (_, _) => { var path = PickImage(); if (path != null) s.Image1 = CopyToData(path, "escena" + (index + 1) + "_foto1" + Path.GetExtension(path)); }; panel.Controls.Add(b1);
         var b2 = new Button { Text = "CAMBIAR FOTO 2", Width = 450, Height = 42 }; b2.Click += (_, _) => { var path = PickImage(); if (path != null) s.Image2 = CopyToData(path, "escena" + (index + 1) + "_foto2" + Path.GetExtension(path)); }; panel.Controls.Add(b2);
         var bg = new Button { Text = "CAMBIAR FONDO DE ESTA ESCENA", Width = 450, Height = 42, BackColor = Color.Goldenrod, ForeColor = Color.Black }; bg.Click += (_, _) => { var path = PickImage(); if (path != null) s.Background = CopyToData(path, "escena" + (index + 1) + "_fondo" + Path.GetExtension(path)); }; panel.Controls.Add(bg);
+        panel.Controls.Add(new Label { Text = "O ELIGE UNO DE LOS 6 FONDOS QUE SUBISTE:", ForeColor = Color.Gold, AutoSize = true, Margin = new Padding(3, 12, 3, 4) });
+        string[] builtInBackgrounds = { "FONDO 1.jpg", "FONDO 2.jpg", "FONDO 3.jpg", "FODNO 4.jpg", "FONDO 5.jpg", "FONDO 6.jpg" };
+        foreach (var file in builtInBackgrounds)
+        {
+            string selectedFile = file;
+            var choose = new Button { Text = "USAR " + file, Width = 450, Height = 36, BackColor = Color.FromArgb(65, 65, 78), ForeColor = Color.White };
+            choose.Click += (_, _) => { var source = Path.Combine(AppContext.BaseDirectory, selectedFile); if (File.Exists(source)) { s.Background = source; if (index == currentScene) SetSceneBackground(source); } else MessageBox.Show(f, "No se encontró " + selectedFile + " junto al programa. Vuelve a compilar la aplicación.", "Fondo no disponible"); };
+            panel.Controls.Add(choose);
+        }
         var save = new Button { Text = "GUARDAR ESCENA", Width = 450, Height = 44, BackColor = Color.LimeGreen }; save.Click += (_, _) => { s.Answer = answerBox.Text; if (index == currentScene) ShowScene(index, false); f.Close(); }; panel.Controls.Add(save);
         f.ShowDialog(owner);
     }
