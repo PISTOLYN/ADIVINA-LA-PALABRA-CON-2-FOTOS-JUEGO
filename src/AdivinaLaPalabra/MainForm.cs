@@ -188,9 +188,12 @@ public sealed class MainForm : Form
         scenePanel.Controls.Add(new Label { Text = "ADMINISTRAR PREGUNTAS Y FOTOGRAFÍAS", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12) });
         for (int i = 0; i < scenes.Count; i++) { int n = i; var b = new Button { Text = "EDITAR ESCENA " + (i + 1), Width = 590, Height = 42 }; b.Click += (_, _) => EditScene(n, f); scenePanel.Controls.Add(b); }
         var add = new Button { Text = "+ AGREGAR NUEVA ESCENA", Width = 590, Height = 48, BackColor = Color.LimeGreen }; add.Click += (_, _) => { scenes.Add(new Scene { Answer = "Nueva respuesta" }); SaveConfig(); f.Close(); ShowScene(scenes.Count - 1, false); OpenSettings(); }; scenePanel.Controls.Add(add);
-        var close = new Button { Text = "GUARDAR Y CERRAR MENÚ", Dock = DockStyle.Bottom, Height = 55, BackColor = Color.Gold, ForeColor = Color.Black, Font = new Font("Arial Black", 12) };
-        close.Click += (_, _) => { SaveConfig(); f.Close(); };
-        f.Controls.Add(close); close.BringToFront();
+        var footer = new Panel { Dock = DockStyle.Bottom, Height = 62, BackColor = Color.FromArgb(18, 18, 24) };
+        var leave = new Button { Text = "SALIR", Width = 170, Height = 48, Left = 12, Top = 7, BackColor = Color.Silver, ForeColor = Color.Black, Font = new Font("Arial Black", 11) };
+        leave.Click += (_, _) => { SaveConfig(); f.Close(); };
+        var closeGame = new Button { Text = "CERRAR JUEGO", Width = 210, Height = 48, Left = 195, Top = 7, BackColor = Color.Firebrick, ForeColor = Color.White, Font = new Font("Arial Black", 11) };
+        closeGame.Click += (_, _) => { SaveConfig(); f.Close(); Close(); };
+        footer.Controls.Add(leave); footer.Controls.Add(closeGame); f.Controls.Add(footer); footer.BringToFront();
         f.FormClosed += (_, _) => settingsOpen = false; f.ShowDialog(this);
     }
     void EditScene(int index, Form owner)
