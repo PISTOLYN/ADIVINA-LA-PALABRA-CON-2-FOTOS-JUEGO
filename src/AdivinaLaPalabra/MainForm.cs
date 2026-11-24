@@ -119,7 +119,7 @@ public sealed class MainForm : Form
     }
     void Scores() { redScore.Text = redPoints.ToString(); blueScore.Text = bluePoints.ToString(); }
     void UpdateClock() { clock.Text = seconds + "\nSEG"; timerPanel.Invalidate(); }
-    void SetStatus(string text, string? team) { status.Text = text; redPanel.BackColor = team == "red" ? Color.Firebrick : Color.FromArgb(45, 8, 16); bluePanel.BackColor = team == "blue" ? Color.RoyalBlue : Color.FromArgb(8, 28, 60); }
+    void SetStatus(string text, string? team) { status.Text = text; redPanel.BackColor = Color.Transparent; bluePanel.BackColor = Color.Transparent; }
     void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
     void ResetBuzzers() { countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · ENTER PARA INICIAR EL TIEMPO", null); }
