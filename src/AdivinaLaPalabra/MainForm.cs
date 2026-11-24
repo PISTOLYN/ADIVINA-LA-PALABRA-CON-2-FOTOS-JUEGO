@@ -16,13 +16,13 @@ public sealed class MainForm : Form
     readonly Label redScore = new(), blueScore = new(), clock = new(), answerLabel = new(), sceneNumber = new(), status = new();
     readonly PictureBox photo1 = new(), photo2 = new(), logoBox = new();
     readonly Panel redPanel = new(), bluePanel = new(), timerPanel = new(), gamePanel = new(), startScreen = new(), winnerScreen = new();
-    readonly System.Windows.Forms.Timer countdown = new() { Interval = 1000 };
+    readonly System.Windows.Forms.Timer countdown = new() { Interval = 100 };
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
     AudioFileReader? audio;
     Image? currentBackground;
     string? winner, logoPath;
-    int seconds = 10, redPoints, bluePoints, currentScene;
+    int seconds = 10, redPoints, bluePoints, currentScene, clockTicks;
     bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen;
     FormBorderStyle oldBorder;
     Rectangle oldBounds;
@@ -36,7 +36,7 @@ public sealed class MainForm : Form
         LoadConfig();
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "lavadora" });
         BuildInterface(); ShowScene(0, false);
-        countdown.Tick += (_, _) => { seconds--; UpdateClock(); if (seconds <= 0) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        countdown.Tick += (_, _) => { clockTicks++; if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
@@ -114,9 +114,9 @@ public sealed class MainForm : Form
     void Scores() { redScore.Text = redPoints.ToString(); blueScore.Text = bluePoints.ToString(); }
     void UpdateClock() { clock.Text = seconds + "\nSEG"; timerPanel.Invalidate(); }
     void SetStatus(string text, string? team) { status.Text = text; redPanel.BackColor = team == "red" ? Color.Firebrick : Color.FromArgb(45, 8, 16); bluePanel.BackColor = team == "blue" ? Color.RoyalBlue : Color.FromArgb(8, 28, 60); }
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! Q = ROJO  |  P = AZUL", null); countdown.Start(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! Q = ROJO  |  P = AZUL", null); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 10; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · ENTER PARA INICIAR EL TIEMPO", null); }
+    void ResetBuzzers() { countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · ENTER PARA INICIAR EL TIEMPO", null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); SetStatus(team == "red" ? "PUNTO PARA EQUIPO ROJO" : "PUNTO PARA EQUIPO AZUL", team); }
     void RevealAnswer() { answerRevealed = true; answerLabel.Text = scenes[currentScene].Answer; }
     void ShowScene(int index, bool startTimer)
