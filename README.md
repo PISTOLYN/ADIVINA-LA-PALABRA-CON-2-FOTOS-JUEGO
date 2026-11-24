@@ -29,7 +29,8 @@ Los instaladores son autocontenidos y no requieren instalar .NET por separado.
 ## Menú secreto M
 - Pestaña MÚSICA: asigna un MP3 distinto a cada uno de los cuatro botones verdes.
 - Pestaña LOGOTIPO: selecciona el logotipo PNG de Desafíos Locos.
-- Pestaña ESCENAS: agrega escenas y edita las dos fotografías y la respuesta de cada una.
+- Pestaña ESCENAS: agrega escenas y edita el fondo propio de cada escena, sus dos fotografías y su respuesta.
+- Las flechas recorren las escenas en ciclo: después de la última vuelve a la primera y antes de la primera vuelve a la última. Los fondos se pueden volver a usar en distintas escenas.
 - SALIR: cierra el menú y regresa al juego.
 - CERRAR JUEGO: cierra el programa.
 
