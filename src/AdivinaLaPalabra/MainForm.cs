@@ -158,19 +158,24 @@ public sealed class MainForm : Form
         // Fondo y animación se pintan juntos en un único búfer, sin parpadeos.
         g.DrawImage(timerArtwork, 0, 0, sourceW, sourceH);
         int lit = Math.Clamp(timerDeciseconds * 6 / 10, 0, 60);
-        for (int i = 0; i < lit; i++)
+        // Apaga primero las 60 rayitas impresas en la imagen; después enciende solo las que corresponden al tiempo.
+        for (int i = 0; i < 60; i++)
         {
             double a = (-90.0 + i * 6.0) * Math.PI / 180.0;
             float cx = 523.5f + (float)Math.Cos(a) * 410f;
             float cy = 504f + (float)Math.Sin(a) * 410f;
             var markState = g.Save();
             g.TranslateTransform(cx, cy); g.RotateTransform((float)(i * 6));
-            using (var glow = new SolidBrush(Color.FromArgb(65, 0, 255, 100))) g.FillEllipse(glow, -14, -39, 28, 78);
-            using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90))) g.FillRectangle(green, -11, -39, 22, 78);
+            using (var off = new SolidBrush(Color.FromArgb(255, 65, 65, 67))) g.FillRectangle(off, -12, -40, 24, 80);
+            if (i < lit)
+            {
+                using (var glow = new SolidBrush(Color.FromArgb(85, 0, 255, 100))) g.FillEllipse(glow, -16, -43, 32, 86);
+                using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90))) g.FillRectangle(green, -11, -39, 22, 78);
+            }
             g.Restore(markState);
         }
-        // Cubre totalmente los números que vienen impresos en la imagen original.
-        using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31))) g.FillRectangle(dark, 350, 345, 350, 345);
+        // Oculta tanto el 10 como la palabra SEG que vienen impresos en el archivo base.
+        using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31))) g.FillRectangle(dark, 350, 345, 350, 430);
         using (var font = new Font("Arial", 184, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var brush = new SolidBrush(Color.Lime))
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
