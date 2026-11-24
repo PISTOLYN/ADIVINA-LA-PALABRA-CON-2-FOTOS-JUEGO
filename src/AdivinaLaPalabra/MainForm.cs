@@ -1,0 +1,51 @@
+using NAudio.Wave;
+namespace AdivinaLaPalabra;
+public sealed class MainForm : Form
+{
+ readonly Label redScore=new(),blueScore=new(),clock=new(),answer=new(),status=new();
+ readonly Panel redPanel=new(),bluePanel=new(),timerPanel=new();
+ readonly PictureBox photo1=new(),photo2=new();
+ readonly System.Windows.Forms.Timer timer=new(){Interval=1000};
+ readonly string?[] audios=new string?[4];
+ WaveOutEvent? player; AudioFileReader? audio;
+ int seconds=10,red=0,blue=0; bool active=false,locked=true,settings=false;
+ string word="lavadora";
+ public MainForm(){Text="Adivina la Palabra con 2 Fotos - Desafíos Locos";BackColor=Color.FromArgb(239,57,8);ForeColor=Color.White;WindowState=FormWindowState.Maximized;MinimumSize=new Size(960,650);KeyPreview=true;Build();timer.Tick+=(_,_)=>{seconds--;UpdateClock();if(seconds<=0){timer.Stop();active=false;locked=true;Say("¡TIEMPO! SE ACABÓ LA RONDA",null);}};UpdateClock();Scores();Say("PRESIONA ENTER PARA INICIAR · Q ROJO · P AZUL",null);}
+ void Build(){
+ var root=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(12),BackColor=BackColor};root.RowStyles.Add(new RowStyle(SizeType.Absolute,145));root.RowStyles.Add(new RowStyle(SizeType.Percent,100));root.RowStyles.Add(new RowStyle(SizeType.Absolute,78));Controls.Add(root);
+ var top=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=3};top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,40));top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,20));top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,40));
+ Team(redPanel,"EQUIPO ROJO",redScore,Color.LightCoral);Team(bluePanel,"EQUIPO AZUL",blueScore,Color.DeepSkyBlue);
+ var center=new Panel{Dock=DockStyle.Fill};var logo=new Label{Text="DESAFÍOS\nLOCOS",Dock=DockStyle.Left,Width=115,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Arial Black",20),ForeColor=Color.Gold};timerPanel.Dock=DockStyle.Fill;timerPanel.BackColor=Color.FromArgb(25,25,25);timerPanel.Paint+=(_,e)=>{using var p=new Pen(Color.Lime,8);e.Graphics.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;e.Graphics.DrawArc(p,7,7,timerPanel.Width-14,timerPanel.Height-14,-90,360f*seconds/10f);};clock.Dock=DockStyle.Fill;clock.TextAlign=ContentAlignment.MiddleCenter;clock.Font=new Font("Arial Black",28);clock.ForeColor=Color.Lime;timerPanel.Controls.Add(clock);center.Controls.Add(timerPanel);center.Controls.Add(logo);top.Controls.Add(redPanel,0,0);top.Controls.Add(center,1,0);top.Controls.Add(bluePanel,2,0);root.Controls.Add(top,0,0);
+ var game=new Panel{Dock=DockStyle.Fill,BackColor=Color.FromArgb(225,255,215,190),Padding=new Padding(12)};var layout=new TableLayoutPanel{Dock=DockStyle.Fill,RowCount=3};layout.RowStyles.Add(new RowStyle(SizeType.Absolute,48));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,120));
+ var title=new Label{Text="ADIVINA LA PALABRA CON 2 FOTOS",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Arial Black",24),ForeColor=Color.White};
+ var pics=new TableLayoutPanel{Dock=DockStyle.Fill,ColumnCount=3};pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,48));pics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,75));pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,48));Photo(photo1);Photo(photo2);var plus=new Label{Text="+",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Arial Black",55),ForeColor=Color.Gold};pics.Controls.Add(photo1,0,0);pics.Controls.Add(plus,1,0);pics.Controls.Add(photo2,2,0);
+ var a=new Panel{Dock=DockStyle.Fill};var lab=new Label{Text="RESPUESTA",Dock=DockStyle.Top,Height=35,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Arial Black",20)};answer.Dock=DockStyle.Fill;answer.Text=word;answer.TextAlign=ContentAlignment.MiddleCenter;answer.BackColor=Color.WhiteSmoke;answer.ForeColor=Color.Red;answer.Font=new Font("Arial Black",48);a.Controls.Add(answer);a.Controls.Add(lab);layout.Controls.Add(title,0,0);layout.Controls.Add(pics,0,1);layout.Controls.Add(a,0,2);game.Controls.Add(layout);root.Controls.Add(game,0,1);
+ var bar=new FlowLayoutPanel{Dock=DockStyle.Fill,WrapContents=false,AutoScroll=true,BackColor=Color.FromArgb(80,0,0,0)};Button(bar,"SALIR",Color.White,Color.Black,ExitGame);Button(bar,"INSTRUCCIONES",Color.MediumPurple,Color.White,Instructions);Button(bar,"GANA ROJO",Color.Red,Color.White,()=>Award("red"));Button(bar,"GANA AZUL",Color.RoyalBlue,Color.White,()=>Award("blue"));Button(bar,"REINICIAR PULSADORES",Color.Purple,Color.White,Reset);for(int i=0;i<4;i++){int n=i;Button(bar,"CELEBRACIÓN "+(i+1),Color.LawnGreen,Color.Black,()=>Play(n));}Button(bar,"DETENER CANCIÓN",Color.Gold,Color.Black,StopAudio);Button(bar,"NOMBRE",Color.DeepSkyBlue,Color.Black,ChangeWord);Button(bar,"PUNTO ROJO +",Color.Red,Color.White,()=>Point("red"));Button(bar,"PUNTO AZUL +",Color.RoyalBlue,Color.White,()=>Point("blue"));root.Controls.Add(bar,0,2);
+ status.Dock=DockStyle.Bottom;status.Height=34;status.TextAlign=ContentAlignment.MiddleCenter;status.Font=new Font("Arial Black",14);status.BackColor=Color.FromArgb(170,0,0,0);game.Controls.Add(status);status.BringToFront();
+ }
+ void Team(Panel p,string name,Label score,Color accent){p.Dock=DockStyle.Fill;p.Margin=new Padding(5);p.BackColor=Color.FromArgb(45,8,16);var title=new Label{Text=name,Dock=DockStyle.Top,Height=42,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Arial Black",19),ForeColor=accent};score.Dock=DockStyle.Fill;score.TextAlign=ContentAlignment.MiddleCenter;score.Font=new Font("Arial Black",65);var icon=new Label{Text="●",Dock=DockStyle.Left,Width=65,TextAlign=ContentAlignment.MiddleCenter,Font=new Font("Arial",40),ForeColor=accent};p.Controls.Add(score);p.Controls.Add(icon);p.Controls.Add(title);}
+ void Photo(PictureBox p){p.Dock=DockStyle.Fill;p.Margin=new Padding(5);p.BackColor=Color.FromArgb(40,40,40);p.BorderStyle=BorderStyle.FixedSingle;p.SizeMode=PictureBoxSizeMode.Zoom;}
+ void Button(FlowLayoutPanel f,string text,Color bg,Color fg,Action action){var b=new System.Windows.Forms.Button{Text=text,Width=Math.Max(85,text.Length*8),Height=62,BackColor=bg,ForeColor=fg,Font=new Font("Arial Black",9),FlatStyle=FlatStyle.Flat,Margin=new Padding(3)};b.Click+=(_,_)=>action();f.Controls.Add(b);}
+ void Scores(){redScore.Text=red.ToString();blueScore.Text=blue.ToString();}
+ void UpdateClock(){clock.Text=seconds+"\nSEG";timerPanel.Invalidate();}
+ void Say(string s,string? team){status.Text=s;redPanel.BackColor=team=="red"?Color.Firebrick:Color.FromArgb(45,8,16);bluePanel.BackColor=team=="blue"?Color.RoyalBlue:Color.FromArgb(8,28,60);}
+ void Start(){timer.Stop();seconds=10;active=true;locked=false;UpdateClock();Say("¡LISTOS! Q = ROJO | P = AZUL",null);timer.Start();}
+ void Buzz(string team){if(!active||locked)return;locked=true;active=false;timer.Stop();Say(team=="red"?"¡EQUIPO ROJO RESPONDE!":"¡EQUIPO AZUL RESPONDE!",team);}
+ void Reset(){timer.Stop();seconds=10;active=false;locked=true;UpdateClock();Say("PULSADORES REINICIADOS · ENTER PARA INICIAR",null);}
+ void Award(string t){Point(t);Reset();Say(t=="red"?"¡PUNTO PARA EQUIPO ROJO!":"¡PUNTO PARA EQUIPO AZUL!",t);}
+ void Point(string t){if(t=="red")red++;else blue++;Scores();}
+ protected override bool ProcessCmdKey(ref Message msg,Keys key){if(key==Keys.M){Settings();return true;}if(key==Keys.Q){Buzz("red");return true;}if(key==Keys.P){Buzz("blue");return true;}if(key==Keys.Enter){if(!active)Start();return true;}if(key==Keys.Escape){Reset();return true;}return base.ProcessCmdKey(ref msg,key);}
+ void Settings(){if(settings)return;settings=true;using var f=new Form{Text="Configuración del juego",StartPosition=FormStartPosition.CenterParent,Size=new Size(570,510),BackColor=Color.FromArgb(30,30,38),ForeColor=Color.White};var panel=new FlowLayoutPanel{Dock=DockStyle.Fill,FlowDirection=FlowDirection.TopDown,Padding=new Padding(15),AutoScroll=true};f.Controls.Add(panel);
+ void AddSetting(string caption,Action action){var b=new System.Windows.Forms.Button{Text=caption,Width=480,Height=38};b.Click+=(_,_)=>action();panel.Controls.Add(b);}
+ AddSetting("Cargar primera fotografía",()=>LoadPhoto(photo1));AddSetting("Cargar segunda fotografía",()=>LoadPhoto(photo2));
+ var txt=new TextBox{Text=word,Width=470};panel.Controls.Add(new Label{Text="Palabra respuesta"});panel.Controls.Add(txt);
+ for(int i=0;i<4;i++){int n=i;AddSetting("Cargar MP3 celebración "+(i+1),()=>{using var d=new OpenFileDialog{Filter="Audio MP3|*.mp3"};if(d.ShowDialog(f)==DialogResult.OK)audios[n]=d.FileName;});}
+ AddSetting("GUARDAR Y CERRAR",()=>{word=txt.Text;answer.Text=word;f.Close();});f.FormClosed+=(_,_)=>settings=false;f.ShowDialog(this);}
+ void LoadPhoto(PictureBox p){using var d=new OpenFileDialog{Filter="Imágenes|*.jpg;*.jpeg;*.png;*.bmp"};if(d.ShowDialog(this)==DialogResult.OK){var old=p.Image;using var img=Image.FromFile(d.FileName);p.Image=new Bitmap(img);old?.Dispose();}}
+ void Play(int n){if(audios[n]==null){MessageBox.Show("Carga un MP3 desde configuración con M.");return;}StopAudio();try{audio=new AudioFileReader(audios[n]!);player=new WaveOutEvent();player.Init(audio);player.Play();}catch(Exception ex){MessageBox.Show(ex.Message);}}
+ void StopAudio(){try{player?.Stop();}catch{}player?.Dispose();player=null;audio?.Dispose();audio=null;}
+ void ChangeWord(){using var f=new Form{Text="Palabra respuesta",Size=new Size(350,140),StartPosition=FormStartPosition.CenterParent};var t=new TextBox{Text=word,Dock=DockStyle.Top};var b=new System.Windows.Forms.Button{Text="ACEPTAR",Dock=DockStyle.Bottom};b.Click+=(_,_)=>{word=t.Text;answer.Text=word;f.Close();};f.Controls.Add(t);f.Controls.Add(b);f.ShowDialog(this);}
+ void Instructions(){MessageBox.Show("ENTER: iniciar ronda de 10 segundos\nQ: Equipo Rojo\nP: Equipo Azul\nM: configuración de fotos, respuesta y MP3\nESC: reiniciar pulsadores\nGANA ROJO / GANA AZUL: asignar punto","Instrucciones");}
+ void ExitGame(){if(MessageBox.Show("¿Deseas salir?","Desafíos Locos",MessageBoxButtons.YesNo)==DialogResult.Yes)Close();}
+ protected override void OnFormClosed(FormClosedEventArgs e){timer.Stop();StopAudio();base.OnFormClosed(e);}
+}
