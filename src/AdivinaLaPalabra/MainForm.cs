@@ -42,7 +42,7 @@ public sealed class MainForm : Form
         LoadConfig();
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "lavadora" });
         BuildInterface(); ShowScene(0, false);
-        ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; ledPanel.Invalidate(); }; ledAnimation.Start();
+        ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; ledPanel.Invalidate(); redPanel.Invalidate(); bluePanel.Invalidate(); }; ledAnimation.Start();
         countdown.Tick += (_, _) => { clockTicks++; if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
@@ -128,6 +128,13 @@ public sealed class MainForm : Form
         var title = new Label { Text = name, Dock = DockStyle.Top, Height = 42, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 19), ForeColor = accent, BackColor = Color.Transparent };
         score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65); score.ForeColor = Color.White; score.BackColor = Color.Transparent; score.Padding = new Padding(0, 0, 0, 34);
         panel.Controls.Add(score); panel.Controls.Add(title);
+        panel.Paint += (_, e) => {
+            if (activeTeam != (name.Contains("ROJO", StringComparison.OrdinalIgnoreCase) ? "red" : "blue")) return;
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            int pulse = 130 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 120);
+            using var pen = new Pen(name.Contains("ROJO", StringComparison.OrdinalIgnoreCase) ? Color.FromArgb(pulse, 255, 35, 20) : Color.FromArgb(pulse, 30, 145, 255), 7);
+            e.Graphics.DrawRectangle(pen, 5, 5, Math.Max(1, panel.Width - 11), Math.Max(1, panel.Height - 11));
+        };
     }
     void ConfigurePhoto(PictureBox p) { p.Dock = DockStyle.Fill; p.Margin = new Padding(5); p.BackColor = Color.FromArgb(40, 40, 40); p.BorderStyle = BorderStyle.FixedSingle; p.SizeMode = PictureBoxSizeMode.Zoom; }
     void AddButton(FlowLayoutPanel bar, string text, Color bg, Color fg, Action action, int? width = null)
@@ -320,6 +327,21 @@ public sealed class MainForm : Form
         buzzerPanel.Controls.Add(new Label { Text = "PULSADOR ROJO", AutoSize = true, ForeColor = Color.White }); buzzerPanel.Controls.Add(redKeyBox); buzzerPanel.Controls.Add(redKeyButton);
         buzzerPanel.Controls.Add(new Label { Text = "PULSADOR AZUL", AutoSize = true, ForeColor = Color.White, Margin = new Padding(3, 18, 3, 3) }); buzzerPanel.Controls.Add(blueKeyBox); buzzerPanel.Controls.Add(blueKeyButton);
         buzzerPanel.Controls.Add(new Label { Text = "Puedes asignar letras o números. No se permite repetir la misma tecla ni usar M (menú).", AutoSize = true, ForeColor = Color.LightGray, MaximumSize = new Size(590, 0), Margin = new Padding(3, 18, 3, 3) });
+        var resetKeyBox = new TextBox { ReadOnly = true, Text = resetKey.ToString(), Width = 90, TextAlign = HorizontalAlignment.Center, Font = new Font("Arial Black", 18), BackColor = Color.White };
+        var resetKeyButton = new Button { Text = "ELEGIR TECLA PARA REINICIAR PULSADORES", Width = 590, Height = 48, BackColor = Color.Purple, ForeColor = Color.White };
+        resetKeyButton.Click += (_, _) => {
+            resetKeyBox.Text = "PRESIONA..."; capturingBuzzerKey = true; resetKeyBox.Focus();
+            KeyEventHandler handler = null!;
+            handler = (_, e) => {
+                var k = e.KeyCode;
+                bool valid = (k >= Keys.A && k <= Keys.Z) || (k >= Keys.D0 && k <= Keys.D9) || (k >= Keys.NumPad0 && k <= Keys.NumPad9);
+                if (!valid || k == Keys.M || k == Keys.Enter || k == redBuzzerKey || k == blueBuzzerKey) { resetKeyBox.Text = "NO DISPONIBLE"; e.SuppressKeyPress = true; return; }
+                resetKey = k; resetKeyBox.Text = k.ToString(); capturingBuzzerKey = false; resetKeyBox.KeyDown -= handler; e.SuppressKeyPress = true;
+            };
+            resetKeyBox.KeyDown += handler;
+        };
+        buzzerPanel.Controls.Add(new Label { Text = "REINICIAR PULSADORES", AutoSize = true, ForeColor = Color.Gold, Margin = new Padding(3, 18, 3, 3) });
+        buzzerPanel.Controls.Add(resetKeyBox); buzzerPanel.Controls.Add(resetKeyButton);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 62, BackColor = Color.FromArgb(18, 18, 24) };
         var saveAll = new Button { Text = "GUARDAR CAMBIOS", Width = 210, Height = 48, Left = 12, Top = 7, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 11) };
         saveAll.Click += (_, _) => { if (SaveConfig()) MessageBox.Show(f, "¡Todos los cambios se guardaron correctamente!", "Desafíos Locos", MessageBoxButtons.OK, MessageBoxIcon.Information); };
