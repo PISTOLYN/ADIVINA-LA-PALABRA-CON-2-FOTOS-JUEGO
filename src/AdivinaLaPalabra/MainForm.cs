@@ -75,18 +75,18 @@ public sealed class MainForm : Form
         gamePanel.Controls.Add(layout); root.Controls.Add(gamePanel, 0, 1);
 
         var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, BackColor = Color.FromArgb(90, 0, 0, 0), Padding = new Padding(2) };
-        AddButton(bar, "SALIR", Color.White, Color.Black, ExitGame);
-        AddButton(bar, "INSTRUCCIONES DEL JUEGO", Color.MediumPurple, Color.White, Instructions);
-        AddButton(bar, "GANA ROJO", Color.Red, Color.White, () => ShowWinner("red"));
-        AddButton(bar, "GANA AZUL", Color.RoyalBlue, Color.White, () => ShowWinner("blue"));
-        AddButton(bar, "REINICIAR PULSADORES", Color.Purple, Color.White, ResetBuzzers);
-        for (int i = 0; i < 4; i++) { int n = i; AddButton(bar, "CELEBRACIÓN " + (i + 1), Color.LawnGreen, Color.Black, () => PlayCelebration(n)); }
-        AddButton(bar, "DETENER CANCIÓN", Color.Gold, Color.Black, StopAudio);
-        AddButton(bar, "NOMBRE", Color.DeepSkyBlue, Color.Black, RevealAnswer);
-        AddButton(bar, "PUNTO ROJO", Color.Red, Color.White, () => AddPoint("red"));
-        AddButton(bar, "PUNTO AZUL", Color.RoyalBlue, Color.White, () => AddPoint("blue"));
-        AddButton(bar, "◀", Color.LightSkyBlue, Color.Black, PreviousScene, 62);
-        AddButton(bar, "▶", Color.IndianRed, Color.White, NextScene, 62);
+        AddButton(bar, "SALIR", Color.White, Color.Black, ExitGame, 78);
+        AddButton(bar, "INSTRUCCIONES", Color.MediumPurple, Color.White, Instructions, 112);
+        AddButton(bar, "GANA ROJO", Color.Red, Color.White, () => ShowWinner("red"), 88);
+        AddButton(bar, "GANA AZUL", Color.RoyalBlue, Color.White, () => ShowWinner("blue"), 88);
+        AddButton(bar, "REINICIAR PULSADORES", Color.Purple, Color.White, ResetBuzzers, 126);
+        for (int i = 0; i < 4; i++) { int n = i; AddButton(bar, "CELEBRACIÓN " + (i + 1), Color.LawnGreen, Color.Black, () => PlayCelebration(n), 96); }
+        AddButton(bar, "DETENER CANCIÓN", Color.Gold, Color.Black, StopAudio, 100);
+        AddButton(bar, "NOMBRE", Color.DeepSkyBlue, Color.Black, RevealAnswer, 76);
+        AddButton(bar, "PUNTO ROJO", Color.Red, Color.White, () => AddPoint("red"), 88);
+        AddButton(bar, "PUNTO AZUL", Color.RoyalBlue, Color.White, () => AddPoint("blue"), 88);
+        AddButton(bar, "◀", Color.LightSkyBlue, Color.Black, PreviousScene, 50);
+        AddButton(bar, "▶", Color.IndianRed, Color.White, NextScene, 50);
         root.Controls.Add(bar, 0, 2);
 
         status.Dock = DockStyle.Bottom; status.Height = 34; status.TextAlign = ContentAlignment.MiddleCenter; status.Font = new Font("Arial Black", 14); status.BackColor = Color.FromArgb(175, 0, 0, 0); gamePanel.Controls.Add(status); status.BringToFront();
