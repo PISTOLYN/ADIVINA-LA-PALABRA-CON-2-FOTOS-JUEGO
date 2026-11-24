@@ -140,10 +140,10 @@ public sealed class MainForm : Form
             float cy = 504f + (float)Math.Sin(a) * 410f;
             var markState = g.Save();
             g.TranslateTransform(cx, cy); g.RotateTransform((float)(i * 6));
-            using (var glow = new System.Drawing.Drawing2D.LinearGradientBrush(new RectangleF(-18, -43, 36, 86), Color.FromArgb(100, 0, 255, 100), Color.FromArgb(0, 0, 255, 100), 0f))
-                g.FillRoundedRectangle(glow, new RectangleF(-18, -43, 36, 86), 10f);
+            using (var glow = new SolidBrush(Color.FromArgb(75, 0, 255, 100)))
+                g.FillEllipse(glow, -17, -44, 34, 88);
             using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90)))
-                g.FillRoundedRectangle(green, new RectangleF(-11, -39, 22, 78), 8f);
+                g.FillRectangle(green, -11, -39, 22, 78);
             g.Restore(markState);
         }
         // Oculta los dígitos impresos en la imagen base y dibuja el tiempo dinámico al centro.
