@@ -196,8 +196,20 @@ public sealed class MainForm : Form
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         if (activeTeam != null)
         {
-            int n = 32;
-            for (int i = 0; i < n; i++) { float x = 12 + (bounds.Width - 24) * i / (n - 1f); int d = (i - ledPhase + n) % n; int a = d < 6 ? 230 - d * 30 : 45; using var bulb = new SolidBrush(activeTeam == "red" ? Color.FromArgb(a, 255, 30, 20) : Color.FromArgb(a, 20, 130, 255)); g.FillEllipse(bulb, x - 5, 5, 10, 10); }
+            // Focos recorriendo el contorno completo en círculo, en el color del equipo que ganó el pulsador.
+            int n = 64, inset = 13;
+            for (int i = 0; i < n; i++)
+            {
+                double t = ((i - ledPhase + n) % n) / (double)n * 4.0;
+                float x, y;
+                if (t < 1) { x = inset + (bounds.Width - inset * 2) * (float)t; y = inset; }
+                else if (t < 2) { x = bounds.Width - inset; y = inset + (bounds.Height - inset * 2) * (float)(t - 1); }
+                else if (t < 3) { x = bounds.Width - inset - (bounds.Width - inset * 2) * (float)(t - 2); y = bounds.Height - inset; }
+                else { x = inset; y = bounds.Height - inset - (bounds.Height - inset * 2) * (float)(t - 3); }
+                int d = (i - ledPhase + n) % n; int alpha = d < 8 ? 245 - d * 25 : 55;
+                using var bulb = new SolidBrush(activeTeam == "red" ? Color.FromArgb(alpha, 255, 35, 20) : Color.FromArgb(alpha, 20, 145, 255));
+                g.FillEllipse(bulb, x - 5, y - 5, 10, 10);
+            }
         }
         g.DrawString(ledMessage, font, brush, new RectangleF(10, 8, bounds.Width - 20, bounds.Height - 16), sf);
     }
