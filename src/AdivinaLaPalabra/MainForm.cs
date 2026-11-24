@@ -8,6 +8,7 @@ public sealed class MainForm : Form
 {
     sealed class Scene { public string Answer { get; set; } = ""; public string Image1 { get; set; } = ""; public string Image2 { get; set; } = ""; public string Background { get; set; } = ""; }
     sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; }
+    sealed class BufferedPanel : Panel { public BufferedPanel() { DoubleBuffered = true; ResizeRedraw = true; SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true); } }
 
     readonly string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesafiosLocos", "AdivinaLaPalabra");
     readonly List<Scene> scenes = new();
@@ -15,7 +16,8 @@ public sealed class MainForm : Form
     readonly Color orange = Color.FromArgb(239, 57, 8);
     readonly Label redScore = new(), blueScore = new(), clock = new(), answerLabel = new(), sceneNumber = new(), status = new();
     readonly PictureBox photo1 = new(), photo2 = new(), logoBox = new();
-    readonly Panel redPanel = new(), bluePanel = new(), timerPanel = new(), gamePanel = new(), startScreen = new(), winnerScreen = new();
+    readonly Panel redPanel = new(), bluePanel = new(), gamePanel = new(), startScreen = new(), winnerScreen = new();
+    readonly BufferedPanel timerPanel = new();
     readonly System.Windows.Forms.Timer countdown = new() { Interval = 100 };
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
@@ -53,17 +55,17 @@ public sealed class MainForm : Form
         var center = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
         logoBox.SizeMode = PictureBoxSizeMode.Zoom; logoBox.Dock = DockStyle.Left; logoBox.Width = 68; logoBox.BackColor = Color.Transparent;
         var brand = new Label { Text = "DESAFÍOS LOCOS", Dock = DockStyle.Top, Height = 25, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 11), ForeColor = Color.Gold, BackColor = Color.Transparent };
-        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.Transparent; timerPanel.BackgroundImageLayout = ImageLayout.Zoom; timerPanel.MinimumSize = new Size(150, 110);
-        var timerPath = Path.Combine(AppContext.BaseDirectory, "CRONOMETRO.png"); if (File.Exists(timerPath)) { using var ti = Image.FromFile(timerPath); timerArtwork = new Bitmap(ti); timerPanel.BackgroundImage = timerArtwork; }
+        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.FromArgb(34, 30, 31); timerPanel.BackgroundImageLayout = ImageLayout.None; timerPanel.MinimumSize = new Size(150, 110);
+        var timerPath = Path.Combine(AppContext.BaseDirectory, "CRONOMETRO.png"); if (File.Exists(timerPath)) { using var ti = Image.FromFile(timerPath); timerArtwork = new Bitmap(ti); }
         
         clock.Visible = false;
         timerPanel.Paint += (_, e) => DrawAnimatedClock(e.Graphics, timerPanel.ClientRectangle);
         center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
         top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 0);
 
-        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.Transparent; gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12);
+        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.Transparent; gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12, 8, 12, 2);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Color.Transparent };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
         sceneNumber.Dock = DockStyle.Fill; sceneNumber.TextAlign = ContentAlignment.MiddleCenter; sceneNumber.Font = new Font("Arial Black", 17); sceneNumber.ForeColor = Color.Yellow; sceneNumber.BackColor = Color.Transparent;
         var title = new Label { Text = "ADIVINA LA PALABRA CON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 24), ForeColor = Color.White, BackColor = Color.Transparent };
         var pics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.Transparent };
@@ -72,10 +74,10 @@ public sealed class MainForm : Form
         var plus = new Label { Text = "+", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 55), ForeColor = Color.Gold, BackColor = Color.Transparent };
         pics.Controls.Add(photo1, 0, 0); pics.Controls.Add(plus, 1, 0); pics.Controls.Add(photo2, 2, 0);
         var answerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
-        answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         answerPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 12), ForeColor = Color.White, BackColor = Color.Transparent, Margin = new Padding(0) };
-        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 30); answerLabel.AutoEllipsis = true; answerLabel.Margin = new Padding(0);
+        var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 16), ForeColor = Color.White, BackColor = Color.Transparent, Margin = new Padding(0) };
+        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 42); answerLabel.AutoEllipsis = true; answerLabel.Margin = new Padding(0);
         answerPanel.Controls.Add(answerTitle, 0, 0); answerPanel.Controls.Add(answerLabel, 0, 1);
         layout.Controls.Add(sceneNumber, 0, 0); layout.Controls.Add(title, 0, 1); layout.Controls.Add(pics, 0, 2); layout.Controls.Add(answerPanel, 0, 3);
         gamePanel.Controls.Add(layout); root.Controls.Add(gamePanel, 0, 1);
@@ -122,15 +124,17 @@ public sealed class MainForm : Form
     void UpdateClock() { timerPanel.Invalidate(); }
     void DrawAnimatedClock(Graphics g, Rectangle bounds)
     {
-        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+        if (bounds.Width <= 0 || bounds.Height <= 0 || timerArtwork == null) return;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
         const float sourceW = 1047f, sourceH = 1008f;
         float scale = Math.Min(bounds.Width / sourceW, bounds.Height / sourceH);
         float ox = bounds.Left + (bounds.Width - sourceW * scale) / 2f;
         float oy = bounds.Top + (bounds.Height - sourceH * scale) / 2f;
         var state = g.Save();
         g.TranslateTransform(ox, oy); g.ScaleTransform(scale, scale);
-        // 60 marcas alrededor del aro: se iluminan seis por cada segundo transcurrido.
+        // Fondo y animación se pintan juntos en un único búfer, sin parpadeos.
+        g.DrawImage(timerArtwork, 0, 0, sourceW, sourceH);
         int elapsed = Math.Clamp(10 - seconds, 0, 10);
         int lit = elapsed * 6;
         for (int i = 0; i < lit; i++)
@@ -140,24 +144,20 @@ public sealed class MainForm : Form
             float cy = 504f + (float)Math.Sin(a) * 410f;
             var markState = g.Save();
             g.TranslateTransform(cx, cy); g.RotateTransform((float)(i * 6));
-            using (var glow = new SolidBrush(Color.FromArgb(75, 0, 255, 100)))
-                g.FillEllipse(glow, -17, -44, 34, 88);
-            using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90)))
-                g.FillRectangle(green, -11, -39, 22, 78);
+            using (var glow = new SolidBrush(Color.FromArgb(65, 0, 255, 100))) g.FillEllipse(glow, -14, -39, 28, 78);
+            using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90))) g.FillRectangle(green, -11, -39, 22, 78);
             g.Restore(markState);
         }
-        // Oculta los dígitos impresos en la imagen base y dibuja el tiempo dinámico al centro.
-        // Tapa por completo los dígitos impresos en CRONOMETRO.png para que no se transparenten por los bordes.
-        using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31)))
-            g.FillRectangle(dark, 350, 345, 350, 345);
+        // Cubre totalmente los números que vienen impresos en la imagen original.
+        using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31))) g.FillRectangle(dark, 350, 345, 350, 345);
         using (var font = new Font("Arial", 184, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var brush = new SolidBrush(Color.Lime))
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
             g.DrawString(seconds.ToString("00"), font, brush, new RectangleF(350, 350, 350, 275), sf);
-        using (var segFont = new Font("Arial", 66, FontStyle.Bold, GraphicsUnit.Pixel))
+        using (var segFont = new Font("Arial", 76, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var segBrush = new SolidBrush(Color.Lime))
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            g.DrawString("SEG", segFont, brush: segBrush, new RectangleF(350, 690, 350, 90), sf);
+            g.DrawString("SEG", segFont, segBrush, new RectangleF(350, 670, 350, 100), sf);
         g.Restore(state);
     }
     void SetStatus(string text, string? team) { status.Text = text; redPanel.BackColor = Color.Transparent; bluePanel.BackColor = Color.Transparent; }
