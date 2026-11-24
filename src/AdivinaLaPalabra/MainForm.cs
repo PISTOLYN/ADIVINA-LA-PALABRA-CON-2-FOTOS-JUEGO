@@ -138,7 +138,10 @@ public sealed class MainForm : Form
         startScreen.Dock = DockStyle.Fill; startScreen.BackColor = Color.FromArgb(235, 50, 8); startScreen.BringToFront();
         var title = new Label { Text = "ADIVINA LA PALABRA\nCON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 42), ForeColor = Color.White };
         var hint = new Label { Text = "PRESIONA ENTER PARA COMENZAR", Dock = DockStyle.Bottom, Height = 105, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 25), ForeColor = Color.Yellow };
-        startScreen.Controls.Add(title); startScreen.Controls.Add(hint); Controls.Add(startScreen); startScreen.BringToFront();
+        startScreen.Controls.Add(title); startScreen.Controls.Add(hint);
+        var splashFullscreen = new Button { Text = "⛶", Width = 54, Height = 32, Left = ClientSize.Width - 66, Top = 5, Anchor = AnchorStyles.Top | AnchorStyles.Right, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 15) };
+        splashFullscreen.Click += (_, _) => ToggleFullscreen(); startScreen.Controls.Add(splashFullscreen); splashFullscreen.BringToFront();
+        Controls.Add(startScreen); startScreen.BringToFront();
         if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) { try { logoBox.Image = Image.FromFile(logoPath); } catch { } }
     }
     void BeginGame() { if (started) return; started = true; startScreen.Visible = false; ShowScene(currentScene, true); }
@@ -146,6 +149,7 @@ public sealed class MainForm : Form
     {
         countdown.Stop(); roundActive = false; buzzLocked = true; winner = team;
         winnerScreen.Controls.Clear(); winnerScreen.Dock = DockStyle.Fill; winnerScreen.BackColor = team == "red" ? Color.DarkRed : Color.DarkBlue;
+        winnerScreen.Visible = true;
         var text = new Label { Text = team == "red" ? "¡GANÓ EL EQUIPO ROJO!" : "¡GANÓ EL EQUIPO AZUL!", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 48), ForeColor = Color.Gold };
         var close = new Button { Text = "VOLVER AL JUEGO", Dock = DockStyle.Bottom, Height = 75, Font = new Font("Arial Black", 18) }; close.Click += (_, _) => winnerScreen.Visible = false;
         winnerScreen.Controls.Add(text); winnerScreen.Controls.Add(close); Controls.Add(winnerScreen); winnerScreen.BringToFront();
