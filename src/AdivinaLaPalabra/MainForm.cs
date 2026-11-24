@@ -80,11 +80,11 @@ public sealed class MainForm : Form
         pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48)); pics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82)); pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
         ConfigurePhoto(photo1); ConfigurePhoto(photo2);
         var plus = new Label { Text = "+", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 55), ForeColor = Color.Gold, BackColor = Color.Transparent };
-        pics.Controls.Add(CreatePhotoFrame(photo1, "MARCO ROJO PNG.png"), 0, 0);
+        redPhotoFrame = CreatePhotoFrame(photo1, "MARCO ROJO PNG.png", "red"); pics.Controls.Add(redPhotoFrame, 0, 0);
         var plusImage = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Transparent };
         string plusPath = Path.Combine(AppContext.BaseDirectory, "SIGNO MAS PNG.png");
         if (File.Exists(plusPath)) { using var pi = Image.FromFile(plusPath); plusImage.Image = new Bitmap(pi); pics.Controls.Add(plusImage, 1, 0); } else pics.Controls.Add(plus, 1, 0);
-        pics.Controls.Add(CreatePhotoFrame(photo2, "MARCO AZUL PNG.png"), 2, 0);
+        bluePhotoFrame = CreatePhotoFrame(photo2, "MARCO AZUL PNG.png", "blue"); pics.Controls.Add(bluePhotoFrame, 2, 0);
         var answerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
         answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         answerPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -157,8 +157,7 @@ public sealed class MainForm : Form
         g.TranslateTransform(ox, oy); g.ScaleTransform(scale, scale);
         // Fondo y animación se pintan juntos en un único búfer, sin parpadeos.
         g.DrawImage(timerArtwork, 0, 0, sourceW, sourceH);
-        int elapsed = Math.Clamp(10 - seconds, 0, 10);
-        int lit = elapsed * 6;
+        int lit = Math.Clamp(timerDeciseconds * 6 / 10, 0, 60);
         for (int i = 0; i < lit; i++)
         {
             double a = (-90.0 + i * 6.0) * Math.PI / 180.0;
@@ -197,16 +196,18 @@ public sealed class MainForm : Form
         }
         g.DrawString(ledMessage, font, brush, new RectangleF(10, 8, bounds.Width - 20, bounds.Height - 16), sf);
     }
-    Panel CreatePhotoFrame(PictureBox photo, string file)
+    Panel CreatePhotoFrame(PictureBox photo, string file, string team)
     {
         var frame = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(42, 48, 42, 48), BackgroundImageLayout = ImageLayout.Stretch };
         string path = Path.Combine(AppContext.BaseDirectory, file);
         if (File.Exists(path)) { using var im = Image.FromFile(path); frame.BackgroundImage = new Bitmap(im); }
-        photo.Dock = DockStyle.Fill; photo.Margin = new Padding(0); frame.Controls.Add(photo); return frame;
+        photo.Dock = DockStyle.Fill; photo.Margin = new Padding(0); frame.Controls.Add(photo);
+        frame.Paint += (_, e) => { if (activeTeam != team) return; int pulse = 100 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 150); using var pen = new Pen(team == "red" ? Color.FromArgb(pulse, 255, 40, 20) : Color.FromArgb(pulse, 20, 130, 255), 8); e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; e.Graphics.DrawRectangle(pen, 4, 4, Math.Max(1, frame.Width - 9), Math.Max(1, frame.Height - 9)); };
+        return frame;
     }
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; clockTicks = 0; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · LISTOS", null); }
+    void ResetBuzzers() { countdown.Stop(); seconds = 10; clockTicks = 0; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · LISTOS", null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); SetStatus(team == "red" ? "PUNTO PARA EQUIPO ROJO" : "PUNTO PARA EQUIPO AZUL", team); }
     void RevealAnswer() { answerRevealed = true; answerLabel.Text = scenes[currentScene].Answer; }
     void ShowScene(int index, bool startTimer)
