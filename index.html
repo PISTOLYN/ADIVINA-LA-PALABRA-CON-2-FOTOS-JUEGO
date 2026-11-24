@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f0440b">
+<title>Adivina la Palabra con 2 Fotos | Desafíos Locos</title>
+<style>
+:root{--orange:#f0440b;--red:#f20d16;--blue:#087bea;--yellow:#ffd52a;--panel:rgba(255,224,202,.78)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;font-family:Arial,Helvetica,sans-serif;color:#fff;overflow:hidden}
+body{background-color:#ef3e08;background-image:radial-gradient(circle at 15% 20%,#ff7137 0 2px,transparent 3px),radial-gradient(circle at 80% 70%,#ff8a45 0 2px,transparent 3px),repeating-linear-gradient(115deg,transparent 0 55px,rgba(255,190,130,.12) 56px 60px,transparent 61px 115px);background-size:90px 90px,130px 130px,auto}
+body:before{content:"¿ ? ¿ ? ¿ ? ¿ ? ¿ ? ¿ ? ¿ ? ¿ ? ¿ ?";position:fixed;inset:-30px;z-index:-1;color:rgba(255,190,140,.19);font-size:clamp(55px,8vw,125px);font-weight:900;letter-spacing:24px;line-height:1.5;overflow:hidden;word-break:break-all;transform:rotate(-8deg)}
+#app{height:100dvh;width:100%;display:flex;flex-direction:column;padding:clamp(7px,1.2vw,18px);gap:clamp(6px,.8vw,12px);min-height:0}
+.top{height:clamp(88px,17vh,175px);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;flex-shrink:0}
+.team{height:90%;max-height:150px;min-width:0;border-radius:22px;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;border:4px solid rgba(255,255,255,.65);box-shadow:inset 0 0 18px #000,0 5px 12px #7a1b0d;background:linear-gradient(145deg,#555,#101018 55%,#25252c);position:relative;overflow:hidden}
+.team.red{border-color:#ff9292;background:linear-gradient(145deg,#6c2229,#090b14 58%,#351018)}
+.team.blue{border-color:#7fc9ff;background:linear-gradient(145deg,#124c85,#090b14 58%,#122b51)}
+.team:before{content:"";position:absolute;inset:5px;border:1px solid rgba(255,255,255,.2);border-radius:14px;pointer-events:none}
+.team-name{position:absolute;top:5px;left:12px;right:12px;text-align:center;font-size:clamp(13px,2vw,27px);font-weight:1000;letter-spacing:1px;text-shadow:0 2px 3px #000}
+.team-icon{font-size:clamp(30px,5vw,68px);margin-top:18px;filter:drop-shadow(0 2px 4px #000)}
+.score{font-size:clamp(48px,7vw,100px);font-weight:1000;line-height:1;margin:15px 8px 0;text-shadow:0 3px 5px #000}
+.brand{display:flex;align-items:center;justify-content:center;gap:clamp(8px,2vw,28px)}
+.logo{width:clamp(75px,11vw,150px);height:clamp(75px,11vw,150px);object-fit:contain;filter:drop-shadow(0 3px 3px #681600)}
+.timer{width:clamp(76px,10vw,145px);height:clamp(76px,10vw,145px);border-radius:50%;background:conic-gradient(#10f57b var(--progress,100%),#393939 0);padding:7px;box-shadow:0 3px 12px #81240b}
+.timer-inner{height:100%;width:100%;border-radius:50%;background:#17191d;border:4px solid #555;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:inset 0 0 12px #000}
+#time{font-size:clamp(31px,4vw,60px);font-weight:1000;color:#20ff86;text-shadow:0 0 12px #00ff80;font-variant-numeric:tabular-nums}
+.sec{font-size:clamp(9px,1vw,15px);font-weight:bold;color:#20ff86;letter-spacing:2px}
+.game-panel{flex:1;min-height:0;background:var(--panel);border:2px solid rgba(255,255,255,.35);border-radius:4px;padding:5px clamp(8px,2vw,28px) 10px;display:flex;flex-direction:column;align-items:center;position:relative}
+h1{font-size:clamp(17px,2.4vw,39px);line-height:1.12;margin:0 0 7px;text-align:center;color:#fff;font-weight:1000;-webkit-text-stroke:1px #111;text-shadow:2px 3px 2px #111}
+.photos{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:clamp(8px,1.5vw,24px);align-items:center;width:min(100%,1450px);flex:1;min-height:0}
+.photo-frame{height:100%;min-height:0;max-height: min(49vh,520px);border:clamp(6px,.9vw,13px) solid #f10b12;border-radius:clamp(22px,3vw,50px);overflow:hidden;background:#242424;box-shadow:0 5px 0 rgba(125,0,0,.35);position:relative}
+.photo-frame img{width:100%;height:100%;display:block;object-fit:cover}
+.plus{width:clamp(54px,8vw,105px);height:clamp(54px,8vw,105px);border-radius:50%;background:#ffd52a;border:7px solid #fff;display:grid;place-items:center;color:#171717;font-size:clamp(45px,6vw,80px);font-weight:1000;text-shadow:1px 2px #fff;box-shadow:0 3px 5px #9a4d14}
+.answer-area{width:min(100%,700px);text-align:center;flex-shrink:0;margin-top:6px}
+.answer-label{font-size:clamp(17px,2.3vw,36px);font-weight:1000;color:#fff;-webkit-text-stroke:1px #111;text-shadow:1px 2px #111;margin-bottom:3px}
+.answer{min-height:clamp(58px,10vh,110px);background:#f4f4f4;color:#f00000;border-radius:4px;display:flex;align-items:center;justify-content:center;padding:0 12px;font-size:clamp(35px,6vw,82px);font-weight:1000;line-height:1.05;overflow-wrap:anywhere}
+#status{position:absolute;top:9px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:30px;background:#161616d9;color:#fff;font-size:clamp(12px,1.3vw,19px);font-weight:900;white-space:nowrap;opacity:0;transition:opacity .15s;z-index:3}
+#status.show{opacity:1}#status.redwin{background:#d90013}#status.bluewin{background:#006bdb}
+.bottom{display:flex;align-items:stretch;gap:6px;min-height:clamp(48px,6.5vh,70px);flex-shrink:0;overflow-x:auto;padding-top:2px}
+button{font-family:inherit;font-weight:1000;cursor:pointer;border:2px solid #161616;box-shadow:0 2px 0 rgba(0,0,0,.45);color:#fff;text-shadow:1px 1px 2px #222;padding:5px 9px;font-size:clamp(10px,1.25vw,18px);line-height:1.05;white-space:normal}
+button:active{transform:translateY(2px);box-shadow:none}
+.btn-white{background:#fff;color:#111;text-shadow:none}.btn-purple{background:#9b20c7}.btn-red{background:#f10b12}.btn-blue{background:#075bea}.btn-green{background:#83d900;color:#101010;text-shadow:none}.btn-yellow{background:#f4d400;color:#111;text-shadow:none}.btn-cyan{background:#05b9df}.btn-dark{background:#333}
+.bottom button{flex:1;min-width:52px}.bottom .wide{flex:1.35}.bottom .celebrate{font-size:clamp(8px,.95vw,13px);min-width:65px}
+.round-nav{border-radius:50%;font-size:clamp(20px,3vw,38px);padding:0;width:clamp(40px,4vw,58px);flex:0 0 clamp(40px,4vw,58px)!important;background:linear-gradient(#fff,#777);color:#111;text-shadow:none}
+.overlay{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:15px;z-index:20}
+.overlay.open{display:flex}.modal{width:min(680px,96vw);max-height:90vh;overflow:auto;background:#17191f;border:3px solid #ffb52b;border-radius:18px;padding:20px;box-shadow:0 10px 40px #000}
+.modal h2{margin:0 0 12px;color:#ffd52a}.modal h3{margin:16px 0 7px}.modal p{color:#ddd;line-height:1.4}.setting-row{display:grid;grid-template-columns:1fr 1.3fr;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #444}.setting-row input{width:100%;color:#fff}.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+input[type=file]{max-width:100%}.hint{font-size:13px;color:#bbb}
+#fullscreen{position:fixed;right:5px;top:5px;z-index:5;background:#20df38;color:#111;border:1px solid #fff;border-radius:7px;font-size:16px}
+@media(max-width:650px){#app{padding:5px;gap:5px}.top{height:85px;gap:5px}.team{border-radius:12px;padding:4px}.team-name{font-size:11px}.team-icon{font-size:27px}.score{font-size:43px}.brand{gap:5px}.logo{width:55px;height:60px}.timer{width:65px;height:65px;padding:4px}.timer-inner{border-width:2px}#time{font-size:29px}.sec{font-size:8px}.game-panel{padding:6px 5px}h1{font-size:16px}.photos{gap:5px}.photo-frame{border-width:5px;border-radius:17px;max-height:40vh}.plus{width:42px;height:42px;border-width:4px;font-size:33px}.answer-area{width:95%}.answer{min-height:55px;font-size:32px}.bottom{gap:3px}.bottom button{padding:4px 5px;min-width:48px;font-size:9px}.bottom .celebrate{font-size:8px;min-width:55px}.round-nav{min-width:34px!important;flex-basis:34px!important;width:34px}.setting-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<button id="fullscreen" title="Pantalla completa">⛶</button>
+<div id="app">
+<header class="top">
+ <section class="team red" id="redTeam"><div class="team-name">EQUIPO ROJO</div><div class="team-icon">👤</div><div class="score" id="redScore">0</div></section>
+ <div class="brand"><img class="logo" src="images/logo-desafios-locos.png" alt="Desafíos Locos" onerror="this.style.display='none'"><div class="timer" id="timer"><div class="timer-inner"><div id="time">10</div><div class="sec">SEG</div></div></div></div>
+ <section class="team blue" id="blueTeam"><div class="team-name">EQUIPO AZUL</div><div class="team-icon">👤</div><div class="score" id="blueScore">0</div></section>
+</header>
+<main class="game-panel">
+ <div id="status" role="status" aria-live="polite"></div>
+ <h1>ADIVINA LA PALABRA CON 2 FOTOS</h1>
+ <div class="photos">
+  <div class="photo-frame"><img id="photo1" src="images/foto1.jpg" alt="Primera pista" onerror="this.src=placeholder(1)"></div>
+  <div class="plus">+</div>
+  <div class="photo-frame"><img id="photo2" src="images/foto2.jpg" alt="Segunda pista" onerror="this.src=placeholder(2)"></div>
+ </div>
+ <div class="answer-area"><div class="answer-label">RESPUESTA</div><div class="answer" id="answer">lavadora</div></div>
+</main>
+<footer class="bottom">
+ <button class="btn-white" id="exitBtn">SALIR</button>
+ <button class="btn-purple wide" id="instructionsBtn">INSTRUCCIONES<br>DEL JUEGO</button>
+ <button class="btn-red" id="redWins">GANA<br>ROJO</button>
+ <button class="btn-blue" id="blueWins">GANA<br>AZUL</button>
+ <button class="btn-purple wide" id="resetBuzz">REINICIAR<br>PULSADORES</button>
+ <button class="btn-green celebrate" data-celebration="0">CELEBRACIÓN 1</button>
+ <button class="btn-green celebrate" data-celebration="1">CELEBRACIÓN 2</button>
+ <button class="btn-green celebrate" data-celebration="2">CELEBRACIÓN 3</button>
+ <button class="btn-green celebrate" data-celebration="3">CELEBRACIÓN 4</button>
+ <button class="btn-yellow" id="stopAudio">DETENER<br>CANCIÓN</button>
+ <button class="btn-cyan" id="nameBtn">NOMBRE</button>
+ <button class="btn-red" id="pointRed">PUNTO +</button>
+ <button class="btn-blue" id="pointBlue">PUNTO +</button>
+ <button class="round-nav" id="prevBtn" title="Foto anterior">❮</button>
+ <button class="round-nav" id="nextBtn" title="Siguiente foto">❯</button>
+</footer>
+</div>
+<div class="overlay" id="settingsOverlay"><section class="modal">
+ <h2>⚙ CONFIGURACIÓN DEL JUEGO</h2>
+ <p>Este menú se abre y se cierra con la tecla <b>M</b>. Los archivos se cargan desde tu computadora y se usan en este navegador.</p>
+ <h3>Fotografías de la ronda</h3>
+ <div class="setting-row"><label for="filePhoto1">Primera fotografía</label><input id="filePhoto1" type="file" accept="image/*"></div>
+ <div class="setting-row"><label for="filePhoto2">Segunda fotografía</label><input id="filePhoto2" type="file" accept="image/*"></div>
+ <div class="setting-row"><label for="answerInput">Palabra respuesta</label><input id="answerInput" type="text" value="lavadora" placeholder="Escribe la respuesta"></div>
+ <h3>Audios de celebración (MP3)</h3>
+ <div id="audioSettings"></div>
+ <p class="hint">Consejo: también puedes colocar imágenes en la carpeta <b>images</b> del proyecto con los nombres foto1.jpg y foto2.jpg. El logo opcional se llama logo-desafios-locos.png.</p>
+ <div class="modal-actions"><button class="btn-white" id="closeSettings">CERRAR Y VOLVER AL JUEGO</button></div>
+</section></div>
+<div class="overlay" id="instructionsOverlay"><section class="modal">
+ <h2>INSTRUCCIONES DEL JUEGO</h2>
+ <p>1. Presiona <b>ENTER</b> para iniciar la ronda y comenzar la cuenta regresiva de 10 segundos.</p>
+ <p>2. El Equipo Rojo presiona <b>Q</b> y el Equipo Azul presiona <b>P</b>. El primero que pulse gana el derecho a responder y detiene el reloj.</p>
+ <p>3. Usa los botones <b>GANA ROJO</b> o <b>GANA AZUL</b> para sumar un punto y preparar la siguiente ronda.</p>
+ <p>4. Presiona <b>M</b> para abrir la configuración, cambiar las fotos, la respuesta y cargar los audios de celebración.</p>
+ <p>5. Los botones de celebración reproducen el audio que hayas asignado. Puedes detenerlo con DETENER CANCIÓN.</p>
+ <div class="modal-actions"><button class="btn-white" id="closeInstructions">ENTENDIDO</button></div>
+</section></div>
+<script>
+const $=id=>document.getElementById(id);
+const placeholder=n=>'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="550"><defs><linearGradient id="g"><stop stop-color="#444"/><stop offset="1" stop-color="#222"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><text x="50%" y="48%" fill="white" font-size="42" text-anchor="middle" font-family="Arial">FOTO '+n+'</text><text x="50%" y="58%" fill="#ffb52b" font-size="24" text-anchor="middle" font-family="Arial">Cárgala en CONFIGURACIÓN (M)</text></svg>');
+let redScore=0,blueScore=0,timeLeft=10,timerId=null,roundActive=false,buzzLocked=true,roundWinner=null,currentAudio=null;
+const celebrationAudio=[null,null,null,null],objectUrls=[];
+function updateScores(){$('redScore').textContent=redScore;$('blueScore').textContent=blueScore}
+function updateTimer(){$('time').textContent=timeLeft;$('timer').style.setProperty('--progress',(timeLeft/10*100)+'%');$('timer').style.background='conic-gradient('+(timeLeft<=3?'#ff2638':'#10f57b')+' '+(timeLeft/10*100)+'%,#393939 0)'}
+function showStatus(message,team){const el=$('status');el.textContent=message;el.className='show '+(team||'');}
+function hideStatus(){$('status').className=''}
+function stopTimer(){if(timerId!==null){clearInterval(timerId);timerId=null}}
+function startRound(){stopTimer();timeLeft=10;roundActive=true;buzzLocked=false;roundWinner=null;hideStatus();$('redTeam').style.outline='none';$('blueTeam').style.outline='none';updateTimer();timerId=setInterval(()=>{timeLeft--;updateTimer();if(timeLeft<=0){stopTimer();roundActive=false;buzzLocked=true;showStatus('¡TIEMPO! SE ACABÓ LA RONDA');}},1000);showStatus('¡LISTOS! Q = ROJO  |  P = AZUL')}
+function buzz(team){if(!roundActive||buzzLocked)return;buzzLocked=true;roundActive=false;stopTimer();roundWinner=team;const isRed=team==='red';$(isRed?'redTeam':'blueTeam').style.outline='5px solid #ffe32b';showStatus(isRed?'¡EQUIPO ROJO RESPONDE!':'¡EQUIPO AZUL RESPONDE!',isRed?'redwin':'bluewin')}
+function resetBuzz(){stopTimer();timeLeft=10;roundActive=false;buzzLocked=true;roundWinner=null;$('redTeam').style.outline='none';$('blueTeam').style.outline='none';updateTimer();showStatus('PULSADORES REINICIADOS · ENTER PARA INICIAR')}
+function award(team){stopTimer();if(team==='red')redScore++;else blueScore++;updateScores();resetBuzz();showStatus(team==='red'?'¡PUNTO PARA EL EQUIPO ROJO!':'¡PUNTO PARA EL EQUIPO AZUL!',team==='red'?'redwin':'bluewin')}
+function openOverlay(id){$(id).classList.add('open')}
+function closeOverlay(id){$(id).classList.remove('open')}
+function toggleSettings(){if($('settingsOverlay').classList.contains('open'))closeOverlay('settingsOverlay');else{closeOverlay('instructionsOverlay');openOverlay('settingsOverlay')}}
+function setImage(inputId,imgId){$(inputId).addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const url=URL.createObjectURL(f);objectUrls.push(url);$(imgId).src=url})}
+setImage('filePhoto1','photo1');setImage('filePhoto2','photo2');
+$('answerInput').addEventListener('input',e=>$('answer').textContent=e.target.value||' ');
+function buildAudioSettings(){const wrap=$('audioSettings');for(let i=0;i<4;i++){const row=document.createElement('div');row.className='setting-row';const label=document.createElement('label');label.textContent='Celebración '+(i+1);const input=document.createElement('input');input.type='file';input.accept='audio/mpeg,audio/mp3,audio/*';input.addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(celebrationAudio[i])URL.revokeObjectURL(celebrationAudio[i]);celebrationAudio[i]=URL.createObjectURL(f);label.textContent='Celebración '+(i+1)+' ✓ '+f.name});row.append(label,input);wrap.append(row)}}
+buildAudioSettings();
+document.querySelectorAll('[data-celebration]').forEach(btn=>btn.addEventListener('click',()=>{const i=Number(btn.dataset.celebration);if(!celebrationAudio[i]){showStatus('ASIGNA UN MP3 EN CONFIGURACIÓN (M)');return}if(currentAudio){currentAudio.pause();currentAudio.currentTime=0}currentAudio=new Audio(celebrationAudio[i]);currentAudio.play().catch(()=>showStatus('NO SE PUDO REPRODUCIR EL AUDIO'))}));
+$('stopAudio').addEventListener('click',()=>{if(currentAudio){currentAudio.pause();currentAudio.currentTime=0}});
+$('redWins').addEventListener('click',()=>award('red'));$('blueWins').addEventListener('click',()=>award('blue'));
+$('pointRed').addEventListener('click',()=>{redScore++;updateScores();showStatus('PUNTO +1 EQUIPO ROJO','redwin')});
+$('pointBlue').addEventListener('click',()=>{blueScore++;updateScores();showStatus('PUNTO +1 EQUIPO AZUL','bluewin')});
+$('resetBuzz').addEventListener('click',resetBuzz);
+$('instructionsBtn').addEventListener('click',()=>openOverlay('instructionsOverlay'));
+$('closeInstructions').addEventListener('click',()=>closeOverlay('instructionsOverlay'));
+$('closeSettings').addEventListener('click',()=>closeOverlay('settingsOverlay'));
+$('fullscreen').addEventListener('click',()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen?.();else document.exitFullscreen?.()});
+$('exitBtn').addEventListener('click',()=>{if(confirm('¿Deseas salir o cerrar esta partida?')){resetBuzz();showStatus('PARTIDA DETENIDA')}})
+$('nameBtn').addEventListener('click',()=>{const name=prompt('Escribe el nombre de la nueva palabra:', $('answer').textContent);if(name!==null){$('answer').textContent=name;$('answerInput').value=name}});
+$('prevBtn').addEventListener('click',()=>showStatus('CARGA LAS FOTOS DE LA SIGUIENTE RONDA CON M'));
+$('nextBtn').addEventListener('click',()=>showStatus('CARGA LAS FOTOS DE LA SIGUIENTE RONDA CON M'));
+document.addEventListener('keydown',e=>{if(e.repeat)return;const tag=e.target&&e.target.tagName;if(['INPUT','TEXTAREA','SELECT'].includes(tag))return;const key=e.key.toLowerCase();if(key==='m'){e.preventDefault();toggleSettings();return}if($('settingsOverlay').classList.contains('open')||$('instructionsOverlay').classList.contains('open')){if(key==='escape'){closeOverlay('settingsOverlay');closeOverlay('instructionsOverlay')}return}if(key==='q'){e.preventDefault();buzz('red')}else if(key==='p'){e.preventDefault();buzz('blue')}else if(key==='enter'){e.preventDefault();if(!roundActive)startRound()}else if(key==='escape'){resetBuzz()}});
+updateScores();updateTimer();showStatus('PRESIONA ENTER PARA INICIAR · Q ROJO · P AZUL');
+</script>
+</body>
+</html>
