@@ -103,11 +103,13 @@ public sealed class MainForm : Form
 
     void BuildTeam(Panel panel, string name, Label score, Color accent)
     {
-        panel.Dock = DockStyle.Fill; panel.Margin = new Padding(5); panel.BackColor = Color.Transparent;
-        var title = new Label { Text = name, Dock = DockStyle.Top, Height = 42, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 19), ForeColor = accent };
-        score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65); score.Padding = new Padding(0, 0, 0, 34);
-        var icon = new Label { Text = "●", Dock = DockStyle.Left, Width = 65, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial", 40), ForeColor = accent };
-        panel.Controls.Add(score); panel.Controls.Add(icon); panel.Controls.Add(title);
+        panel.Dock = DockStyle.Fill; panel.Margin = new Padding(5); panel.BackColor = Color.Transparent; panel.BackgroundImageLayout = ImageLayout.Zoom;
+        string counterFile = name.Contains("ROJO", StringComparison.OrdinalIgnoreCase) ? "CONTADOR ROJO.png" : "CONTADOR AZUL.png";
+        string counterPath = Path.Combine(AppContext.BaseDirectory, counterFile);
+        if (File.Exists(counterPath)) { using var counterImage = Image.FromFile(counterPath); panel.BackgroundImage = new Bitmap(counterImage); }
+        var title = new Label { Text = name, Dock = DockStyle.Top, Height = 42, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 19), ForeColor = accent, BackColor = Color.Transparent };
+        score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65); score.ForeColor = Color.White; score.BackColor = Color.Transparent; score.Padding = new Padding(0, 0, 0, 34);
+        panel.Controls.Add(score); panel.Controls.Add(title);
     }
     void ConfigurePhoto(PictureBox p) { p.Dock = DockStyle.Fill; p.Margin = new Padding(5); p.BackColor = Color.FromArgb(40, 40, 40); p.BorderStyle = BorderStyle.FixedSingle; p.SizeMode = PictureBoxSizeMode.Zoom; }
     void AddButton(FlowLayoutPanel bar, string text, Color bg, Color fg, Action action, int? width = null)
