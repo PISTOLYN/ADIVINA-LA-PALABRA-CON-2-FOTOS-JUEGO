@@ -56,8 +56,9 @@ public sealed class MainForm : Form
         timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.Transparent; timerPanel.BackgroundImageLayout = ImageLayout.Zoom; timerPanel.MinimumSize = new Size(150, 110);
         var timerPath = Path.Combine(AppContext.BaseDirectory, "CRONOMETRO.png"); if (File.Exists(timerPath)) { using var ti = Image.FromFile(timerPath); timerArtwork = new Bitmap(ti); timerPanel.BackgroundImage = timerArtwork; }
         
-        clock.Dock = DockStyle.Fill; clock.TextAlign = ContentAlignment.MiddleCenter; clock.Font = new Font("Arial Black", 30); clock.ForeColor = Color.Lime; clock.BackColor = Color.Transparent;
-        timerPanel.Controls.Add(clock); center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
+        clock.Visible = false;
+        timerPanel.Paint += (_, e) => DrawAnimatedClock(e.Graphics, timerPanel.ClientRectangle);
+        center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
         top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 0);
 
         gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.Transparent; gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12);
@@ -118,7 +119,46 @@ public sealed class MainForm : Form
         b.Click += (_, _) => action(); bar.Controls.Add(b);
     }
     void Scores() { redScore.Text = redPoints.ToString(); blueScore.Text = bluePoints.ToString(); }
-    void UpdateClock() { clock.Text = seconds + "\nSEG"; timerPanel.Invalidate(); }
+    void UpdateClock() { timerPanel.Invalidate(); }
+    void DrawAnimatedClock(Graphics g, Rectangle bounds)
+    {
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        const float sourceW = 1047f, sourceH = 1008f;
+        float scale = Math.Min(bounds.Width / sourceW, bounds.Height / sourceH);
+        float ox = bounds.Left + (bounds.Width - sourceW * scale) / 2f;
+        float oy = bounds.Top + (bounds.Height - sourceH * scale) / 2f;
+        var state = g.Save();
+        g.TranslateTransform(ox, oy); g.ScaleTransform(scale, scale);
+        // 60 marcas alrededor del aro: se iluminan seis por cada segundo transcurrido.
+        int elapsed = Math.Clamp(10 - seconds, 0, 10);
+        int lit = elapsed * 6;
+        for (int i = 0; i < lit; i++)
+        {
+            double a = (-90.0 + i * 6.0) * Math.PI / 180.0;
+            float cx = 523.5f + (float)Math.Cos(a) * 410f;
+            float cy = 504f + (float)Math.Sin(a) * 410f;
+            var markState = g.Save();
+            g.TranslateTransform(cx, cy); g.RotateTransform((float)(i * 6));
+            using (var glow = new System.Drawing.Drawing2D.LinearGradientBrush(new RectangleF(-18, -43, 36, 86), Color.FromArgb(100, 0, 255, 100), Color.FromArgb(0, 0, 255, 100), 0f))
+                g.FillRoundedRectangle(glow, new RectangleF(-18, -43, 36, 86), 10f);
+            using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90)))
+                g.FillRoundedRectangle(green, new RectangleF(-11, -39, 22, 78), 8f);
+            g.Restore(markState);
+        }
+        // Oculta los dígitos impresos en la imagen base y dibuja el tiempo dinámico al centro.
+        using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31)))
+            g.FillEllipse(dark, 330, 330, 387, 410);
+        using (var font = new Font("Arial", 172, FontStyle.Bold, GraphicsUnit.Pixel))
+        using (var brush = new SolidBrush(Color.Lime))
+        using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            g.DrawString(seconds.ToString("00"), font, brush, new RectangleF(330, 345, 387, 270), sf);
+        using (var segFont = new Font("Arial", 66, FontStyle.Bold, GraphicsUnit.Pixel))
+        using (var segBrush = new SolidBrush(Color.Lime))
+        using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+            g.DrawString("SEG", segFont, segBrush, new RectangleF(350, 615, 347, 90), sf);
+        g.Restore(state);
+    }
     void SetStatus(string text, string? team) { status.Text = text; redPanel.BackColor = Color.Transparent; bluePanel.BackColor = Color.Transparent; }
     void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; clockTicks = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
