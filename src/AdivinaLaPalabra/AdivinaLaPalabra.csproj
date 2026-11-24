@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><ApplicationManifest>app.manifest</ApplicationManifest><AssemblyName>AdivinaLaPalabra</AssemblyName><Version>1.0.0</Version></PropertyGroup>
-<ItemGroup><PackageReference Include="NAudio" Version="2.2.1" /></ItemGroup>
+<ItemGroup><PackageReference Include="NAudio" Version="2.2.1" /><PackageReference Include="System.Speech" Version="8.0.0" /></ItemGroup>
 </Project>
