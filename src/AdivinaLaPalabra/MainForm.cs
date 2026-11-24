@@ -46,15 +46,15 @@ public sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 145)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); Controls.Add(root);
 
         var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
         BuildTeam(redPanel, "EQUIPO ROJO", redScore, Color.LightCoral);
         BuildTeam(bluePanel, "EQUIPO AZUL", blueScore, Color.DeepSkyBlue);
         var center = new Panel { Dock = DockStyle.Fill };
-        logoBox.SizeMode = PictureBoxSizeMode.Zoom; logoBox.Dock = DockStyle.Left; logoBox.Width = 120; logoBox.BackColor = Color.Transparent;
-        var brand = new Label { Text = "DESAFÍOS\nLOCOS", Dock = DockStyle.Left, Width = 115, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 20), ForeColor = Color.Gold };
-        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.FromArgb(25, 25, 25);
-        timerPanel.Paint += (_, e) => { e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; using var p = new Pen(Color.Lime, 8); float remaining = Math.Max(0, seconds - clockTicks / 10f); e.Graphics.DrawArc(p, 7, 7, timerPanel.Width - 14, timerPanel.Height - 14, -90, 360f * remaining / 10f); };
-        clock.Dock = DockStyle.Fill; clock.TextAlign = ContentAlignment.MiddleCenter; clock.Font = new Font("Arial Black", 28); clock.ForeColor = Color.Lime;
+        logoBox.SizeMode = PictureBoxSizeMode.Zoom; logoBox.Dock = DockStyle.Left; logoBox.Width = 68; logoBox.BackColor = Color.Transparent;
+        var brand = new Label { Text = "DESAFÍOS LOCOS", Dock = DockStyle.Top, Height = 25, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 11), ForeColor = Color.Gold, BackColor = Color.Transparent };
+        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.FromArgb(25, 25, 25); timerPanel.MinimumSize = new Size(150, 110);
+        timerPanel.Paint += (_, e) => { e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; float remaining = Math.Max(0, seconds - clockTicks / 10f); float diameter = Math.Max(20, Math.Min(timerPanel.ClientSize.Width, timerPanel.ClientSize.Height) - 18); float x = (timerPanel.ClientSize.Width - diameter) / 2f; float y = (timerPanel.ClientSize.Height - diameter) / 2f; using var p = new Pen(remaining <= 3 ? Color.Red : Color.Lime, 8); e.Graphics.DrawArc(p, x, y, diameter, diameter, -90, 360f * remaining / 10f); };
+        clock.Dock = DockStyle.Fill; clock.TextAlign = ContentAlignment.MiddleCenter; clock.Font = new Font("Arial Black", 30); clock.ForeColor = Color.Lime; clock.BackColor = Color.Transparent;
         timerPanel.Controls.Add(clock); center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
         top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 0);
 
