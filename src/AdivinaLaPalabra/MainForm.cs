@@ -20,7 +20,7 @@ public sealed class MainForm : Form
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
     AudioFileReader? audio;
-    Image? currentBackground;
+    Image? currentBackground, timerArtwork;
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P;
     int seconds = 10, redPoints, bluePoints, currentScene, clockTicks;
@@ -43,23 +43,24 @@ public sealed class MainForm : Form
 
     void BuildInterface()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(12), BackColor = orange };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(12), BackColor = Color.Transparent, BackgroundImageLayout = ImageLayout.Stretch };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 145)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); Controls.Add(root);
 
-        var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+        var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.Transparent };
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
         BuildTeam(redPanel, "EQUIPO ROJO", redScore, Color.LightCoral);
         BuildTeam(bluePanel, "EQUIPO AZUL", blueScore, Color.DeepSkyBlue);
-        var center = new Panel { Dock = DockStyle.Fill };
+        var center = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
         logoBox.SizeMode = PictureBoxSizeMode.Zoom; logoBox.Dock = DockStyle.Left; logoBox.Width = 68; logoBox.BackColor = Color.Transparent;
         var brand = new Label { Text = "DESAFÍOS LOCOS", Dock = DockStyle.Top, Height = 25, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 11), ForeColor = Color.Gold, BackColor = Color.Transparent };
-        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.FromArgb(25, 25, 25); timerPanel.MinimumSize = new Size(150, 110);
-        timerPanel.Paint += (_, e) => { e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; float remaining = Math.Max(0, seconds - clockTicks / 10f); float diameter = Math.Max(20, Math.Min(timerPanel.ClientSize.Width, timerPanel.ClientSize.Height) - 18); float x = (timerPanel.ClientSize.Width - diameter) / 2f; float y = (timerPanel.ClientSize.Height - diameter) / 2f; using var p = new Pen(remaining <= 3 ? Color.Red : Color.Lime, 8); e.Graphics.DrawArc(p, x, y, diameter, diameter, -90, 360f * remaining / 10f); };
+        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.Transparent; timerPanel.BackgroundImageLayout = ImageLayout.Zoom; timerPanel.MinimumSize = new Size(150, 110);
+        var timerPath = Path.Combine(AppContext.BaseDirectory, "CRONOMETRO.png"); if (File.Exists(timerPath)) { using var ti = Image.FromFile(timerPath); timerArtwork = new Bitmap(ti); timerPanel.BackgroundImage = timerArtwork; }
+        
         clock.Dock = DockStyle.Fill; clock.TextAlign = ContentAlignment.MiddleCenter; clock.Font = new Font("Arial Black", 30); clock.ForeColor = Color.Lime; clock.BackColor = Color.Transparent;
         timerPanel.Controls.Add(clock); center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
         top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 0);
 
-        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.FromArgb(225, 255, 215, 190); gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12);
+        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.Transparent; gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Color.Transparent };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
         sceneNumber.Dock = DockStyle.Fill; sceneNumber.TextAlign = ContentAlignment.MiddleCenter; sceneNumber.Font = new Font("Arial Black", 17); sceneNumber.ForeColor = Color.Yellow; sceneNumber.BackColor = Color.Transparent;
@@ -102,7 +103,7 @@ public sealed class MainForm : Form
 
     void BuildTeam(Panel panel, string name, Label score, Color accent)
     {
-        panel.Dock = DockStyle.Fill; panel.Margin = new Padding(5); panel.BackColor = Color.FromArgb(45, 8, 16);
+        panel.Dock = DockStyle.Fill; panel.Margin = new Padding(5); panel.BackColor = Color.Transparent;
         var title = new Label { Text = name, Dock = DockStyle.Top, Height = 42, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 19), ForeColor = accent };
         score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65); score.Padding = new Padding(0, 0, 0, 34);
         var icon = new Label { Text = "●", Dock = DockStyle.Left, Width = 65, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial", 40), ForeColor = accent };
@@ -138,7 +139,10 @@ public sealed class MainForm : Form
     void SetSceneBackground(string path)
     {
         var old = currentBackground; currentBackground = null; gamePanel.BackgroundImage = null; old?.Dispose();
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { using var img = Image.FromFile(path); currentBackground = new Bitmap(img); gamePanel.BackgroundImage = currentBackground; }
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { using var img = Image.FromFile(path); currentBackground = new Bitmap(img); }
+        gamePanel.BackgroundImage = currentBackground;
+        if (Controls.Count > 0 && Controls[0] is TableLayoutPanel root) { root.BackgroundImage = currentBackground; root.BackgroundImageLayout = ImageLayout.Stretch; }
+        BackgroundImage = currentBackground; BackgroundImageLayout = ImageLayout.Stretch;
     }
     void PreviousScene() { if (scenes.Count > 0) ShowScene(currentScene - 1, true); }
     void NextScene() { if (scenes.Count > 0) ShowScene(currentScene + 1, true); }
@@ -285,5 +289,5 @@ public sealed class MainForm : Form
         try { speech.SpeakAsyncCancelAll(); speech.SpeakAsync(text); } catch { MessageBox.Show(this, text, "Instrucciones del juego"); }
     }
     void ExitGame() { if (MessageBox.Show(this, "¿Deseas salir del juego?", "Desafíos Locos", MessageBoxButtons.YesNo) == DialogResult.Yes) Close(); }
-    protected override void OnFormClosed(FormClosedEventArgs e) { countdown.Stop(); StopAudio(); currentBackground?.Dispose(); speech.Dispose(); base.OnFormClosed(e); }
+    protected override void OnFormClosed(FormClosedEventArgs e) { countdown.Stop(); StopAudio(); currentBackground?.Dispose(); timerArtwork?.Dispose(); speech.Dispose(); base.OnFormClosed(e); }
 }
