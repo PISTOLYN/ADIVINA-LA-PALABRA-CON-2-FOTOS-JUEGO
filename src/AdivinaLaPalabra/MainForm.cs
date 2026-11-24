@@ -104,7 +104,7 @@ public sealed class MainForm : Form
     {
         panel.Dock = DockStyle.Fill; panel.Margin = new Padding(5); panel.BackColor = Color.FromArgb(45, 8, 16);
         var title = new Label { Text = name, Dock = DockStyle.Top, Height = 42, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 19), ForeColor = accent };
-        score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65);
+        score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65); score.Padding = new Padding(0, 0, 0, 34);
         var icon = new Label { Text = "●", Dock = DockStyle.Left, Width = 65, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial", 40), ForeColor = accent };
         panel.Controls.Add(score); panel.Controls.Add(icon); panel.Controls.Add(title);
     }
