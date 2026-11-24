@@ -36,7 +36,7 @@ public sealed class MainForm : Form
         LoadConfig();
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "lavadora" });
         BuildInterface(); ShowScene(0, false);
-        countdown.Tick += (_, _) => { clockTicks++; if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        countdown.Tick += (_, _) => { clockTicks++; timerPanel.Invalidate(); if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
@@ -53,7 +53,7 @@ public sealed class MainForm : Form
         logoBox.SizeMode = PictureBoxSizeMode.Zoom; logoBox.Dock = DockStyle.Left; logoBox.Width = 120; logoBox.BackColor = Color.Transparent;
         var brand = new Label { Text = "DESAFÍOS\nLOCOS", Dock = DockStyle.Left, Width = 115, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 20), ForeColor = Color.Gold };
         timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.FromArgb(25, 25, 25);
-        timerPanel.Paint += (_, e) => { e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; using var p = new Pen(Color.Lime, 8); e.Graphics.DrawArc(p, 7, 7, timerPanel.Width - 14, timerPanel.Height - 14, -90, 360f * seconds / 10f); };
+        timerPanel.Paint += (_, e) => { e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; using var p = new Pen(Color.Lime, 8); float remaining = Math.Max(0, seconds - clockTicks / 10f); e.Graphics.DrawArc(p, 7, 7, timerPanel.Width - 14, timerPanel.Height - 14, -90, 360f * remaining / 10f); };
         clock.Dock = DockStyle.Fill; clock.TextAlign = ContentAlignment.MiddleCenter; clock.Font = new Font("Arial Black", 28); clock.ForeColor = Color.Lime;
         timerPanel.Controls.Add(clock); center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
         top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 0);
