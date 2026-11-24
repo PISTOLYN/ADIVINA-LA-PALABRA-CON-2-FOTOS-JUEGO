@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><ApplicationManifest>app.manifest</ApplicationManifest><AssemblyName>AdivinaLaPalabra</AssemblyName><Version>1.0.0</Version></PropertyGroup>
-<ItemGroup><PackageReference Include="NAudio" Version="2.2.1" /><PackageReference Include="System.Speech" Version="8.0.0" /></ItemGroup>
+<ItemGroup><PackageReference Include="NAudio" Version="2.2.1" /><PackageReference Include="System.Speech" Version="8.0.0" />
+  <Content Include="../../CONTADOR ROJO.png" Link="CONTADOR ROJO.png" CopyToOutputDirectory="PreserveNewest" />
+  <Content Include="../../CONTADOR AZUL.png" Link="CONTADOR AZUL.png" CopyToOutputDirectory="PreserveNewest" />
+</ItemGroup>
 
 <ItemGroup>
   <Content Include="../../FONDO 1.jpg" Link="FONDO 1.jpg" CopyToOutputDirectory="PreserveNewest" />
