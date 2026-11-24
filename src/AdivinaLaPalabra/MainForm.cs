@@ -6,7 +6,7 @@ namespace AdivinaLaPalabra;
 
 public sealed class MainForm : Form
 {
-    sealed class Scene { public string Answer { get; set; } = ""; public string Image1 { get; set; } = ""; public string Image2 { get; set; } = ""; }
+    sealed class Scene { public string Answer { get; set; } = ""; public string Image1 { get; set; } = ""; public string Image2 { get; set; } = ""; public string Background { get; set; } = ""; }
     sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); }
 
     readonly string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesafiosLocos", "AdivinaLaPalabra");
@@ -20,6 +20,7 @@ public sealed class MainForm : Form
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
     AudioFileReader? audio;
+    Image? currentBackground;
     string? winner, logoPath;
     int seconds = 10, redPoints, bluePoints, currentScene;
     bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen;
@@ -57,17 +58,17 @@ public sealed class MainForm : Form
         timerPanel.Controls.Add(clock); center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
         top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 0);
 
-        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.FromArgb(225, 255, 215, 190); gamePanel.Padding = new Padding(12);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1 };
+        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.FromArgb(225, 255, 215, 190); gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Color.Transparent };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
-        sceneNumber.Dock = DockStyle.Fill; sceneNumber.TextAlign = ContentAlignment.MiddleCenter; sceneNumber.Font = new Font("Arial Black", 17); sceneNumber.ForeColor = Color.Yellow;
-        var title = new Label { Text = "ADIVINA LA PALABRA CON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 24), ForeColor = Color.White };
-        var pics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+        sceneNumber.Dock = DockStyle.Fill; sceneNumber.TextAlign = ContentAlignment.MiddleCenter; sceneNumber.Font = new Font("Arial Black", 17); sceneNumber.ForeColor = Color.Yellow; sceneNumber.BackColor = Color.Transparent;
+        var title = new Label { Text = "ADIVINA LA PALABRA CON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 24), ForeColor = Color.White, BackColor = Color.Transparent };
+        var pics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.Transparent };
         pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48)); pics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82)); pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
         ConfigurePhoto(photo1); ConfigurePhoto(photo2);
-        var plus = new Label { Text = "+", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 55), ForeColor = Color.Gold };
+        var plus = new Label { Text = "+", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 55), ForeColor = Color.Gold, BackColor = Color.Transparent };
         pics.Controls.Add(photo1, 0, 0); pics.Controls.Add(plus, 1, 0); pics.Controls.Add(photo2, 2, 0);
-        var answerPanel = new Panel { Dock = DockStyle.Fill };
+        var answerPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
         var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Top, Height = 34, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 20), ForeColor = Color.White };
         answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 48);
         answerPanel.Controls.Add(answerLabel); answerPanel.Controls.Add(answerTitle);
@@ -121,9 +122,9 @@ public sealed class MainForm : Form
     void ShowScene(int index, bool startTimer)
     {
         if (scenes.Count == 0) return;
-        currentScene = Math.Clamp(index, 0, scenes.Count - 1); var s = scenes[currentScene];
+        currentScene = ((index % scenes.Count) + scenes.Count) % scenes.Count; var s = scenes[currentScene];
         sceneNumber.Text = "ESCENA " + (currentScene + 1) + " / " + scenes.Count;
-        answerRevealed = false; answerLabel.Text = "¿ ? ¿ ?"; SetImage(photo1, s.Image1); SetImage(photo2, s.Image2);
+        answerRevealed = false; answerLabel.Text = "¿ ? ¿ ?"; SetImage(photo1, s.Image1); SetImage(photo2, s.Image2); SetSceneBackground(s.Background);
         ResetBuzzers(); if (startTimer && started) StartRound();
     }
     void SetImage(PictureBox box, string path)
@@ -131,8 +132,13 @@ public sealed class MainForm : Form
         var old = box.Image; box.Image = null; old?.Dispose();
         if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { using var img = Image.FromFile(path); box.Image = new Bitmap(img); }
     }
-    void PreviousScene() { if (currentScene > 0) ShowScene(currentScene - 1, true); }
-    void NextScene() { if (currentScene < scenes.Count - 1) ShowScene(currentScene + 1, true); }
+    void SetSceneBackground(string path)
+    {
+        var old = currentBackground; currentBackground = null; gamePanel.BackgroundImage = null; old?.Dispose();
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { using var img = Image.FromFile(path); currentBackground = new Bitmap(img); gamePanel.BackgroundImage = currentBackground; }
+    }
+    void PreviousScene() { if (scenes.Count > 0) ShowScene(currentScene - 1, true); }
+    void NextScene() { if (scenes.Count > 0) ShowScene(currentScene + 1, true); }
     void ShowStartScreen()
     {
         startScreen.Dock = DockStyle.Fill; startScreen.BackColor = Color.FromArgb(235, 50, 8); startScreen.BringToFront();
@@ -189,7 +195,7 @@ public sealed class MainForm : Form
         logoPanel.Controls.Add(new Label { Text = "CAMBIAR LOGOTIPO DE DESAFÍOS LOCOS (PNG)", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 13) });
         var logoButton = new Button { Text = "SELECCIONAR LOGOTIPO PNG", Width = 590, Height = 55 }; logoButton.Click += (_, _) => { using var d = new OpenFileDialog { Filter = "Imagen PNG|*.png" }; if (d.ShowDialog(f) == DialogResult.OK) { logoPath = CopyToData(d.FileName, "logo-desafios-locos.png"); SetImageLogo(); SaveConfig(); MessageBox.Show(f, "Logotipo guardado. Se mostrará en la pantalla del juego."); } }; logoPanel.Controls.Add(logoButton);
         var scenePanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(18), AutoScroll = true, WrapContents = false }; scenesTab.Controls.Add(scenePanel);
-        scenePanel.Controls.Add(new Label { Text = "ADMINISTRAR PREGUNTAS Y FOTOGRAFÍAS", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12) });
+        scenePanel.Controls.Add(new Label { Text = "ADMINISTRAR FONDOS, FOTOGRAFÍAS Y RESPUESTAS", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12) });
         for (int i = 0; i < scenes.Count; i++) { int n = i; var b = new Button { Text = "EDITAR ESCENA " + (i + 1), Width = 590, Height = 42 }; b.Click += (_, _) => EditScene(n, f); scenePanel.Controls.Add(b); }
         var add = new Button { Text = "+ AGREGAR NUEVA ESCENA", Width = 590, Height = 48, BackColor = Color.LimeGreen }; add.Click += (_, _) => { scenes.Add(new Scene { Answer = "Nueva respuesta" }); SaveConfig(); f.Close(); ShowScene(scenes.Count - 1, false); OpenSettings(); }; scenePanel.Controls.Add(add);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 62, BackColor = Color.FromArgb(18, 18, 24) };
@@ -203,12 +209,13 @@ public sealed class MainForm : Form
     void EditScene(int index, Form owner)
     {
         var s = scenes[index];
-        using var f = new Form { Text = "Editar escena " + (index + 1), StartPosition = FormStartPosition.CenterParent, Size = new Size(520, 330), BackColor = Color.FromArgb(35, 35, 42) };
+        using var f = new Form { Text = "Editar escena " + (index + 1), StartPosition = FormStartPosition.CenterParent, Size = new Size(540, 410), BackColor = Color.FromArgb(35, 35, 42) };
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(15), WrapContents = false }; f.Controls.Add(panel);
         var answerBox = new TextBox { Text = s.Answer, Width = 450 };
         panel.Controls.Add(new Label { Text = "RESPUESTA (se mantiene oculta hasta presionar NOMBRE)", ForeColor = Color.White, AutoSize = true }); panel.Controls.Add(answerBox);
         var b1 = new Button { Text = "CAMBIAR FOTO 1", Width = 450, Height = 42 }; b1.Click += (_, _) => { var path = PickImage(); if (path != null) s.Image1 = CopyToData(path, "escena" + (index + 1) + "_foto1" + Path.GetExtension(path)); }; panel.Controls.Add(b1);
         var b2 = new Button { Text = "CAMBIAR FOTO 2", Width = 450, Height = 42 }; b2.Click += (_, _) => { var path = PickImage(); if (path != null) s.Image2 = CopyToData(path, "escena" + (index + 1) + "_foto2" + Path.GetExtension(path)); }; panel.Controls.Add(b2);
+        var bg = new Button { Text = "CAMBIAR FONDO DE ESTA ESCENA", Width = 450, Height = 42, BackColor = Color.Goldenrod, ForeColor = Color.Black }; bg.Click += (_, _) => { var path = PickImage(); if (path != null) s.Background = CopyToData(path, "escena" + (index + 1) + "_fondo" + Path.GetExtension(path)); }; panel.Controls.Add(bg);
         var save = new Button { Text = "GUARDAR ESCENA", Width = 450, Height = 44, BackColor = Color.LimeGreen }; save.Click += (_, _) => { s.Answer = answerBox.Text; SaveConfig(); if (index == currentScene) ShowScene(index, false); f.Close(); }; panel.Controls.Add(save);
         f.ShowDialog(owner);
     }
@@ -237,5 +244,5 @@ public sealed class MainForm : Form
         try { speech.SpeakAsyncCancelAll(); speech.SpeakAsync(text); } catch { MessageBox.Show(this, text, "Instrucciones del juego"); }
     }
     void ExitGame() { if (MessageBox.Show(this, "¿Deseas salir del juego?", "Desafíos Locos", MessageBoxButtons.YesNo) == DialogResult.Yes) Close(); }
-    protected override void OnFormClosed(FormClosedEventArgs e) { countdown.Stop(); StopAudio(); speech.Dispose(); base.OnFormClosed(e); }
+    protected override void OnFormClosed(FormClosedEventArgs e) { countdown.Stop(); StopAudio(); currentBackground?.Dispose(); speech.Dispose(); base.OnFormClosed(e); }
 }
