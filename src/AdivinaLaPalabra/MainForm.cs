@@ -68,10 +68,12 @@ public sealed class MainForm : Form
         ConfigurePhoto(photo1); ConfigurePhoto(photo2);
         var plus = new Label { Text = "+", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 55), ForeColor = Color.Gold, BackColor = Color.Transparent };
         pics.Controls.Add(photo1, 0, 0); pics.Controls.Add(plus, 1, 0); pics.Controls.Add(photo2, 2, 0);
-        var answerPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
-        var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Top, Height = 34, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 20), ForeColor = Color.White };
-        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 48);
-        answerPanel.Controls.Add(answerLabel); answerPanel.Controls.Add(answerTitle);
+        var answerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
+        answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        answerPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 12), ForeColor = Color.White, BackColor = Color.Transparent, Margin = new Padding(0) };
+        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 30); answerLabel.AutoEllipsis = true; answerLabel.Margin = new Padding(0);
+        answerPanel.Controls.Add(answerTitle, 0, 0); answerPanel.Controls.Add(answerLabel, 0, 1);
         layout.Controls.Add(sceneNumber, 0, 0); layout.Controls.Add(title, 0, 1); layout.Controls.Add(pics, 0, 2); layout.Controls.Add(answerPanel, 0, 3);
         gamePanel.Controls.Add(layout); root.Controls.Add(gamePanel, 0, 1);
 
