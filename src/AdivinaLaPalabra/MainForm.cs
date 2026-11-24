@@ -16,6 +16,7 @@ public sealed class MainForm : Form
     readonly Color orange = Color.FromArgb(239, 57, 8);
     readonly Label redScore = new(), blueScore = new(), clock = new(), answerLabel = new(), sceneNumber = new(), status = new();
     readonly PictureBox photo1 = new(), photo2 = new(), logoBox = new();
+    readonly Panel redPhotoFrame = new(), bluePhotoFrame = new();
     readonly Panel redPanel = new(), bluePanel = new(), gamePanel = new(), startScreen = new(), winnerScreen = new();
     readonly BufferedPanel timerPanel = new();
     readonly BufferedPanel ledPanel = new();
@@ -28,7 +29,7 @@ public sealed class MainForm : Form
     Image? currentBackground, timerArtwork;
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P, resetKey = Keys.R;
-    int seconds = 10, redPoints, bluePoints, currentScene, clockTicks;
+    int seconds = 10, redPoints, bluePoints, currentScene, clockTicks, timerDeciseconds;
     bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen, capturingBuzzerKey;
     FormBorderStyle oldBorder;
     Rectangle oldBounds;
@@ -43,7 +44,7 @@ public sealed class MainForm : Form
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "lavadora" });
         BuildInterface(); ShowScene(0, false);
         ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; ledPanel.Invalidate(); redPanel.Invalidate(); bluePanel.Invalidate(); }; ledAnimation.Start();
-        countdown.Tick += (_, _) => { clockTicks++; if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, timerDeciseconds + 1); seconds = Math.Max(0, 10 - timerDeciseconds / 10); UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
