@@ -51,7 +51,7 @@ public sealed class MainForm : Form
     void BuildInterface()
     {
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(10, 6, 10, 6), BackColor = Color.Transparent, BackgroundImageLayout = ImageLayout.Stretch };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 145)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); Controls.Add(root);
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); Controls.Add(root);
         ledPanel.Dock = DockStyle.Fill; ledPanel.BackColor = Color.FromArgb(18, 15, 20);
         string ledPath = Path.Combine(AppContext.BaseDirectory, "PANTALLA LEDS.jpg");
         if (File.Exists(ledPath)) { using var li = Image.FromFile(ledPath); ledPanel.BackgroundImage = new Bitmap(li); ledPanel.BackgroundImageLayout = ImageLayout.Stretch; }
@@ -74,7 +74,7 @@ public sealed class MainForm : Form
 
         gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.Transparent; gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12, 8, 12, 2);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Color.Transparent };
-        layout.RowCount = 2; layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowCount = 2; layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         sceneNumber.Dock = DockStyle.Fill; sceneNumber.TextAlign = ContentAlignment.MiddleCenter; sceneNumber.Font = new Font("Arial Black", 17); sceneNumber.ForeColor = Color.Yellow; sceneNumber.BackColor = Color.Transparent;
         var title = new Label { Text = "ADIVINA LA PALABRA CON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 24), ForeColor = Color.White, BackColor = Color.Transparent };
         var pics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.Transparent };
@@ -87,10 +87,10 @@ public sealed class MainForm : Form
         if (File.Exists(plusPath)) { using var pi = Image.FromFile(plusPath); plusImage.Image = new Bitmap(pi); pics.Controls.Add(plusImage, 1, 0); } else pics.Controls.Add(plus, 1, 0);
         bluePhotoFrame = CreatePhotoFrame(photo2, "MARCO AZUL PNG.png", "blue"); pics.Controls.Add(bluePhotoFrame, 2, 0);
         var answerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
-        answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         answerPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 16), ForeColor = Color.White, BackColor = Color.Transparent, Margin = new Padding(0) };
-        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 42); answerLabel.AutoEllipsis = true; answerLabel.Margin = new Padding(0);
+        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 38); answerLabel.AutoEllipsis = true; answerLabel.Margin = new Padding(0);
         answerPanel.Controls.Add(answerTitle, 0, 0); answerPanel.Controls.Add(answerLabel, 0, 1);
         layout.Controls.Add(answerPanel, 0, 0); layout.Controls.Add(pics, 0, 1);
         gamePanel.Controls.Add(layout); root.Controls.Add(gamePanel, 0, 2);
@@ -137,7 +137,7 @@ public sealed class MainForm : Form
             e.Graphics.DrawRectangle(pen, 5, 5, Math.Max(1, panel.Width - 11), Math.Max(1, panel.Height - 11));
         };
     }
-    void ConfigurePhoto(PictureBox p) { p.Dock = DockStyle.Fill; p.Margin = new Padding(5); p.BackColor = Color.FromArgb(40, 40, 40); p.BorderStyle = BorderStyle.FixedSingle; p.SizeMode = PictureBoxSizeMode.Zoom; }
+    void ConfigurePhoto(PictureBox p) { p.Dock = DockStyle.Fill; p.Margin = new Padding(0); p.BackColor = Color.Transparent; p.BorderStyle = BorderStyle.None; p.SizeMode = PictureBoxSizeMode.Zoom; }
     void AddButton(FlowLayoutPanel bar, string text, Color bg, Color fg, Action action, int? width = null)
     {
         var b = new Button { Text = text, Width = width ?? Math.Max(88, text.Length * 8), Height = 66, BackColor = bg, ForeColor = fg, Font = new Font("Arial Black", 9), FlatStyle = FlatStyle.Flat, Margin = new Padding(3) };
@@ -216,7 +216,7 @@ public sealed class MainForm : Form
     }
     Panel CreatePhotoFrame(PictureBox photo, string file, string team)
     {
-        var frame = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(42, 48, 42, 48), BackgroundImageLayout = ImageLayout.Stretch };
+        var frame = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(54, 58, 54, 58), BackgroundImageLayout = ImageLayout.Stretch };
         string path = Path.Combine(AppContext.BaseDirectory, file);
         if (File.Exists(path)) { using var im = Image.FromFile(path); frame.BackgroundImage = new Bitmap(im); }
         photo.Dock = DockStyle.Fill; photo.Margin = new Padding(0); frame.Controls.Add(photo);
