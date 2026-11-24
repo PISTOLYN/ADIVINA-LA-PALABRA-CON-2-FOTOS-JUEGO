@@ -37,7 +37,7 @@ public sealed class MainForm : Form
         LoadConfig();
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "lavadora" });
         BuildInterface(); ShowScene(0, false);
-        countdown.Tick += (_, _) => { clockTicks++; timerPanel.Invalidate(); if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        countdown.Tick += (_, _) => { clockTicks++; if (clockTicks >= 10) { clockTicks = 0; seconds--; UpdateClock(); } if (seconds <= 0) { seconds = 0; UpdateClock(); countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
@@ -147,16 +147,17 @@ public sealed class MainForm : Form
             g.Restore(markState);
         }
         // Oculta los dígitos impresos en la imagen base y dibuja el tiempo dinámico al centro.
+        // Tapa por completo los dígitos impresos en CRONOMETRO.png para que no se transparenten por los bordes.
         using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31)))
-            g.FillEllipse(dark, 330, 330, 387, 410);
-        using (var font = new Font("Arial", 172, FontStyle.Bold, GraphicsUnit.Pixel))
+            g.FillRectangle(dark, 350, 345, 350, 345);
+        using (var font = new Font("Arial", 184, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var brush = new SolidBrush(Color.Lime))
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            g.DrawString(seconds.ToString("00"), font, brush, new RectangleF(330, 345, 387, 270), sf);
+            g.DrawString(seconds.ToString("00"), font, brush, new RectangleF(350, 350, 350, 275), sf);
         using (var segFont = new Font("Arial", 66, FontStyle.Bold, GraphicsUnit.Pixel))
         using (var segBrush = new SolidBrush(Color.Lime))
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            g.DrawString("SEG", segFont, segBrush, new RectangleF(350, 615, 347, 90), sf);
+            g.DrawString("SEG", segFont, brush: segBrush, new RectangleF(350, 690, 350, 90), sf);
         g.Restore(state);
     }
     void SetStatus(string text, string? team) { status.Text = text; redPanel.BackColor = Color.Transparent; bluePanel.BackColor = Color.Transparent; }
