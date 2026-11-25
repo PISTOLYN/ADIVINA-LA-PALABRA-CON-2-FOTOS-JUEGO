@@ -193,15 +193,6 @@ public sealed class MainForm : Form
         DrawScore(g, RedCounterRect, redPoints); DrawScore(g, BlueCounterRect, bluePoints);
         DrawAnswer(g);
 
-        // Resplandor del equipo que ganó el pulsador
-        if (activeTeam != null)
-        {
-            int pulse = 110 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 140);
-            bool red = activeTeam == "red";
-            using var pen = new Pen(red ? Color.FromArgb(pulse, 255, 40, 20) : Color.FromArgb(pulse, 25, 140, 255), 8) { LineJoin = LineJoin.Round };
-            var fr = red ? redFrame : blueFrame; fr.Inflate(-4, -4); g.DrawRectangle(pen, fr.X, fr.Y, fr.Width, fr.Height);
-            var cn = red ? RedCounterRect : BlueCounterRect; cn.Inflate(-2, -2); g.DrawRectangle(pen, cn.X, cn.Y, cn.Width, cn.Height);
-        }
         DrawPressFeedback(g);
     }
 
@@ -389,19 +380,23 @@ public sealed class MainForm : Form
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
         if (activeTeam != null)
         {
-            // Focos recorriendo el contorno completo, en el color del equipo que ganó el pulsador.
+            // Parpadean únicamente las luces del color del equipo que pulsó primero.
+            bool red = activeTeam == "red";
+            bool lightsOn = (ledTick / 3) % 2 == 0;
             int n = 64, inset = 13;
-            for (int i = 0; i < n; i++)
+            if (lightsOn)
             {
-                int pos = (ledTick * 2) % n; double t = ((i - pos + n) % n) / (double)n * 4.0;
-                float x, y;
-                if (t < 1) { x = inset + (bounds.Width - inset * 2) * (float)t; y = inset; }
-                else if (t < 2) { x = bounds.Width - inset; y = inset + (bounds.Height - inset * 2) * (float)(t - 1); }
-                else if (t < 3) { x = bounds.Width - inset - (bounds.Width - inset * 2) * (float)(t - 2); y = bounds.Height - inset; }
-                else { x = inset; y = bounds.Height - inset - (bounds.Height - inset * 2) * (float)(t - 3); }
-                int d = (i - pos + n) % n; int alpha = d < 10 ? 255 - d * 20 : 60;
-                using var bulb = new SolidBrush(activeTeam == "red" ? Color.FromArgb(alpha, 255, 35, 20) : Color.FromArgb(alpha, 20, 145, 255));
-                g.FillEllipse(bulb, x - 6, y - 6, 12, 12);
+                for (int i = 0; i < n; i++)
+                {
+                    double t = i / (double)n * 4.0;
+                    float x, y;
+                    if (t < 1) { x = inset + (bounds.Width - inset * 2) * (float)t; y = inset; }
+                    else if (t < 2) { x = bounds.Width - inset; y = inset + (bounds.Height - inset * 2) * (float)(t - 1); }
+                    else if (t < 3) { x = bounds.Width - inset - (bounds.Width - inset * 2) * (float)(t - 2); y = bounds.Height - inset; }
+                    else { x = inset; y = bounds.Height - inset - (bounds.Height - inset * 2) * (float)(t - 3); }
+                    using var bulb = new SolidBrush(red ? Color.FromArgb(255, 255, 35, 20) : Color.FromArgb(255, 20, 145, 255));
+                    g.FillEllipse(bulb, x - 6, y - 6, 12, 12);
+                }
             }
         }
         using var font = new Font("Consolas", bounds.Height * 0.56f, FontStyle.Bold, GraphicsUnit.Pixel);
