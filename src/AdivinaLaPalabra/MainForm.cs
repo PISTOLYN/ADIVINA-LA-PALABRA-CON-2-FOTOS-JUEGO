@@ -22,13 +22,20 @@ public sealed class MainForm : Form
     readonly BufferedPanel stage = new();
     readonly Panel startScreen = new(), winnerScreen = new();
     readonly System.Windows.Forms.Timer ledAnimation = new() { Interval = 80 };
-    string ledMessage = DefaultTitle; string? activeTeam; int ledPhase;
+    string ledMessage = DefaultTitle; string? activeTeam; int ledPhase, ledTick;
     readonly System.Windows.Forms.Timer countdown = new() { Interval = 100 };
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
     AudioFileReader? audio;
     Bitmap? sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB;
     string answerText = "";
+    RectangleF redFrame = RedFrameBox, blueFrame = BlueFrameBox, redWin = new(WinX, WinY, WinW, WinH), blueWin = new(WinX, WinY, WinW, WinH);
+    readonly List<string> bgFiles = new();
+    Hit? pressedHit, flashHit; DateTime flashUntil;
+    readonly Panel instructionsScreen = new();
+    readonly Label instructionsBody = new();
+    readonly System.Windows.Forms.Timer typeTimer = new() { Interval = 60 };
+    string instructionsText = ""; int typedChars;
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P, resetKey = Keys.R;
     int seconds = 10, redPoints, bluePoints, currentScene, timerDeciseconds;
@@ -53,7 +60,7 @@ public sealed class MainForm : Form
         }
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
-        ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; stage.Invalidate(); }; ledAnimation.Start();
+        ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; stage.Invalidate(); }; ledAnimation.Start();
         countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, timerDeciseconds + 1); seconds = Math.Max(0, 10 - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
@@ -64,14 +71,14 @@ public sealed class MainForm : Form
     // para que se vea siempre igual que la maqueta (marcador, respuesta, marcos con focos y barra de botones).
     const float DW = 1427f, DH = 923f;
     static readonly RectangleF LedRect = new(28, 18, 1377, 74);
-    static readonly RectangleF RedCounterRect = new(48, 95, 265, 158);
-    static readonly RectangleF BlueCounterRect = new(1126, 94, 260, 153);
+    static readonly RectangleF RedCounterRect = new(24, 92, 300, 178);
+    static readonly RectangleF BlueCounterRect = new(1103, 92, 300, 178);
     static readonly RectangleF AnswerBand = new(455, 132, 548, 90);
     static readonly RectangleF LeftLogoRect = new(332, 110, 130, 138);
     static readonly RectangleF RightLogoRect = new(997, 104, 130, 138);
-    static readonly RectangleF RedFrameRect = new(25, 255, 650, 580);
-    static readonly RectangleF BlueFrameRect = new(765, 255, 650, 580);
-    static readonly RectangleF PlusRect = new(680, 474, 88, 88);
+    static readonly RectangleF RedFrameBox = new(25, 274, 650, 556);
+    static readonly RectangleF BlueFrameBox = new(765, 274, 650, 556);
+    static readonly RectangleF PlusRect = new(680, 506, 88, 88);
     static readonly RectangleF BarRect = new(28, 833, 1377, 84);
     // Ventana transparente interior de los marcos (proporción dentro de la imagen recortada).
     const float WinX = 0.1019f, WinY = 0.1668f, WinW = 0.7962f, WinH = 0.6714f;
@@ -84,13 +91,25 @@ public sealed class MainForm : Form
         Bitmap? A(string f) => LoadBitmap(Path.Combine(AppContext.BaseDirectory, f));
         defaultBackground = A("FODNO 4.jpg") ?? A("FONDO 4.jpg");
         ledArt = A("PANTALLA LEDS.jpg"); barArt = A("BARRA DE BOTONES.jpg");
-        counterRedArt = A("CONTADOR ROJO.png"); counterBlueArt = A("CONTADOR AZUL.png");
-        frameRedArt = A("MARCO ROJO PNG.png"); frameBlueArt = A("MARCO AZUL PNG.png"); plusArt = A("SIGNO MAS PNG.png");
+        Bitmap? T(string f) => LoadPhoto(Path.Combine(AppContext.BaseDirectory, f));
+        counterRedArt = T("CONTADOR ROJO.png"); counterBlueArt = T("CONTADOR AZUL.png");
+        frameRedArt = T("MARCO ROJO ALA MEDIDA.png") ?? T("MARCO ROJO PNG.png");
+        frameBlueArt = T("MARCO AZUL ALA MEDIDA.png") ?? T("MARCO AZUL PNG.png");
+        plusArt = T("SIGNO MAS PNG.png");
+        redWin = FindWindow(frameRedArt); blueWin = FindWindow(frameBlueArt);
+        redFrame = FitRect(frameRedArt, RedFrameBox); blueFrame = FitRect(frameBlueArt, BlueFrameBox);
+        LoadBackgroundList();
         SetImageLogo();
 
         stage.Dock = DockStyle.Fill; stage.BackColor = orange;
         stage.Paint += (_, e) => PaintStage(e.Graphics);
-        stage.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) ClickStage(e.Location); };
+        stage.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) { pressedHit = HitAt(e.Location); stage.Invalidate(); } };
+        stage.MouseUp += (_, e) =>
+        {
+            var h = pressedHit; pressedHit = null;
+            if (e.Button == MouseButtons.Left && h != null && ReferenceEquals(HitAt(e.Location), h)) { flashHit = h; flashUntil = DateTime.UtcNow.AddMilliseconds(240); stage.Invalidate(); h.Act(); }
+            else stage.Invalidate();
+        };
         stage.MouseMove += (_, e) => stage.Cursor = HitAt(e.Location) != null ? Cursors.Hand : Cursors.Default;
         Controls.Add(stage);
 
@@ -158,9 +177,9 @@ public sealed class MainForm : Form
         DrawZoom(g, logoArt, LeftLogoRect); DrawZoom(g, logoArt, RightLogoRect);
 
         // Fotos (debajo) y marcos con focos (encima)
-        DrawCover(g, photoA, WindowOf(RedFrameRect)); DrawCover(g, photoB, WindowOf(BlueFrameRect));
-        if (frameRedArt != null) g.DrawImage(frameRedArt, RedFrameRect);
-        if (frameBlueArt != null) g.DrawImage(frameBlueArt, BlueFrameRect);
+        DrawCover(g, photoA, WindowOf(redFrame, redWin)); DrawCover(g, photoB, WindowOf(blueFrame, blueWin));
+        if (frameRedArt != null) g.DrawImage(frameRedArt, redFrame);
+        if (frameBlueArt != null) g.DrawImage(frameBlueArt, blueFrame);
         if (plusArt != null) g.DrawImage(plusArt, PlusRect); else DrawOutlined(g, "+", 80, PlusRect, Brushes.Gold, Color.Black, 4f);
 
         // Resplandor del equipo que ganó el pulsador
@@ -169,17 +188,85 @@ public sealed class MainForm : Form
             int pulse = 110 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 140);
             bool red = activeTeam == "red";
             using var pen = new Pen(red ? Color.FromArgb(pulse, 255, 40, 20) : Color.FromArgb(pulse, 25, 140, 255), 8) { LineJoin = LineJoin.Round };
-            var fr = red ? RedFrameRect : BlueFrameRect; fr.Inflate(-4, -4); g.DrawRectangle(pen, fr.X, fr.Y, fr.Width, fr.Height);
+            var fr = red ? redFrame : blueFrame; fr.Inflate(-4, -4); g.DrawRectangle(pen, fr.X, fr.Y, fr.Width, fr.Height);
             var cn = red ? RedCounterRect : BlueCounterRect; cn.Inflate(-2, -2); g.DrawRectangle(pen, cn.X, cn.Y, cn.Width, cn.Height);
         }
 
         // Barra de botones
         if (barArt != null) g.DrawImage(barArt, BarRect);
+        DrawPressFeedback(g);
     }
 
-    static RectangleF WindowOf(RectangleF f)
+    RectangleF HitRect(Hit h) => new(BarRect.X + h.L * BarRect.Width, BarRect.Y + BarRect.Height * 0.12f, (h.R - h.L) * BarRect.Width, BarRect.Height * 0.76f);
+    // Efecto de botón presionado: se oscurece con borde blanco mientras se mantiene el clic y destella al soltar.
+    void DrawPressFeedback(Graphics g)
     {
-        var r = new RectangleF(f.X + f.Width * WinX, f.Y + f.Height * WinY, f.Width * WinW, f.Height * WinH);
+        if (pressedHit != null)
+        {
+            var r = HitRect(pressedHit); using var path = RoundRect(r, Math.Min(r.Width, r.Height) * 0.28f);
+            using var shade = new SolidBrush(Color.FromArgb(105, 0, 0, 0)); g.FillPath(shade, path);
+            using var pen = new Pen(Color.FromArgb(235, 255, 255, 255), 3.5f); g.DrawPath(pen, path);
+        }
+        else if (flashHit != null && DateTime.UtcNow < flashUntil)
+        {
+            double left = (flashUntil - DateTime.UtcNow).TotalMilliseconds / 240.0;
+            var r = HitRect(flashHit); using var path = RoundRect(r, Math.Min(r.Width, r.Height) * 0.28f);
+            using var glow = new SolidBrush(Color.FromArgb((int)(150 * left), 255, 255, 255)); g.FillPath(glow, path);
+        }
+    }
+    static GraphicsPath RoundRect(RectangleF r, float rad)
+    {
+        var gp = new GraphicsPath(); float d = rad * 2;
+        gp.AddArc(r.X, r.Y, d, d, 180, 90); gp.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        gp.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); gp.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        gp.CloseFigure(); return gp;
+    }
+    // Ventana transparente interior del marco: se detecta sola, así cualquier marco "a la medida" funciona.
+    static RectangleF FindWindow(Bitmap? b)
+    {
+        var fallback = new RectangleF(WinX, WinY, WinW, WinH);
+        if (b == null) return fallback;
+        try
+        {
+            int step = Math.Max(1, b.Width / 300), gw = b.Width / step, gh = b.Height / step;
+            var clear = new bool[gw, gh];
+            var data = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+            try
+            {
+                var buf = new byte[Math.Abs(data.Stride) * b.Height]; Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+                for (int gy = 0; gy < gh; gy++) for (int gx = 0; gx < gw; gx++) clear[gx, gy] = buf[gy * step * data.Stride + gx * step * 4 + 3] < 24;
+            }
+            finally { b.UnlockBits(data); }
+            int cx = gw / 2, cy = gh / 2; if (!clear[cx, cy]) return fallback;
+            var seen = new bool[gw, gh]; var q = new Queue<(int, int)>(); q.Enqueue((cx, cy)); seen[cx, cy] = true;
+            int minX = cx, maxX = cx, minY = cy, maxY = cy;
+            int[] dx = { 1, -1, 0, 0 }, dy = { 0, 0, 1, -1 };
+            while (q.Count > 0)
+            {
+                var (x, y) = q.Dequeue();
+                minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+                for (int k = 0; k < 4; k++)
+                {
+                    int nx = x + dx[k], ny = y + dy[k];
+                    if (nx < 0 || ny < 0 || nx >= gw || ny >= gh || seen[nx, ny] || !clear[nx, ny]) continue;
+                    seen[nx, ny] = true; q.Enqueue((nx, ny));
+                }
+            }
+            if (minX <= 0 || minY <= 0 || maxX >= gw - 1 || maxY >= gh - 1) return fallback;
+            return new RectangleF((float)minX / gw, (float)minY / gh, (float)(maxX - minX + 1) / gw, (float)(maxY - minY + 1) / gh);
+        }
+        catch { return fallback; }
+    }
+    static RectangleF FitRect(Image? img, RectangleF box)
+    {
+        if (img == null) return box;
+        float sc = Math.Min(box.Width / img.Width, box.Height / img.Height), w = img.Width * sc, h = img.Height * sc;
+        return new RectangleF(box.X + (box.Width - w) / 2f, box.Y + (box.Height - h) / 2f, w, h);
+    }
+
+    static RectangleF WindowOf(RectangleF f, RectangleF w)
+    {
+        var r = new RectangleF(f.X + f.Width * w.X, f.Y + f.Height * w.Y, f.Width * w.Width, f.Height * w.Height);
         r.Inflate(3, 3); return r;   // un poco más grande para que el marco lo tape sin dejar rendijas
     }
     static void DrawCover(Graphics g, Image? img, RectangleF dest)
@@ -208,11 +295,16 @@ public sealed class MainForm : Form
     }
     void DrawScore(Graphics g, RectangleF counter, int points)
     {
-        var box = new RectangleF(counter.X + counter.Width * 0.56f, counter.Y + counter.Height * 0.36f, counter.Width * 0.38f, counter.Height * 0.50f);
-        using var font = new Font("Arial Black", 66, FontStyle.Bold, GraphicsUnit.Pixel);
-        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        using (var shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0))) g.DrawString(points.ToString(), font, shadow, new RectangleF(box.X + 3, box.Y + 3, box.Width, box.Height), sf);
-        g.DrawString(points.ToString(), font, Brushes.WhiteSmoke, box, sf);
+        var box = new RectangleF(counter.X + counter.Width * 0.575f, counter.Y + counter.Height * 0.40f, counter.Width * 0.345f, counter.Height * 0.43f);
+        string s = points.ToString(); float px = 64;
+        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+        Font font = new("Arial Black", px, FontStyle.Bold, GraphicsUnit.Pixel);
+        while (px > 14) { var m = g.MeasureString(s, font, 10000, sf); if (m.Width <= box.Width * 0.92f && m.Height <= box.Height * 1.05f) break; font.Dispose(); px -= 3; font = new Font("Arial Black", px, FontStyle.Bold, GraphicsUnit.Pixel); }
+        using (font)
+        {
+            using (var shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0))) g.DrawString(s, font, shadow, new RectangleF(box.X + 2, box.Y + 2, box.Width, box.Height), sf);
+            g.DrawString(s, font, Brushes.WhiteSmoke, box, sf);
+        }
     }
     void DrawAnswer(Graphics g)
     {
@@ -224,7 +316,7 @@ public sealed class MainForm : Form
         using (font) using (var red = new SolidBrush(Color.FromArgb(240, 0, 0))) g.DrawString(text, font, red, AnswerBand, sf);
     }
 
-    void SetStatus(string text, string? team) { activeTeam = team; ledMessage = team == "red" ? "TURNO PARA EL EQUIPO ROJO" : team == "blue" ? "TURNO PARA EL EQUIPO AZUL" : text; ledPhase = 0; stage.Invalidate(); }
+    void SetStatus(string text, string? team) { activeTeam = team; ledMessage = team == "red" ? "TURNO PARA EL EQUIPO ROJO" : team == "blue" ? "TURNO PARA EL EQUIPO AZUL" : text; ledPhase = 0; ledTick = 0; stage.Invalidate(); }
     void Scores() { stage.Invalidate(); }
     void UpdateClock() { stage.Invalidate(); }
 
@@ -237,24 +329,25 @@ public sealed class MainForm : Form
             int n = 64, inset = 13;
             for (int i = 0; i < n; i++)
             {
-                double t = ((i - ledPhase + n) % n) / (double)n * 4.0;
+                int pos = (ledTick * 2) % n; double t = ((i - pos + n) % n) / (double)n * 4.0;
                 float x, y;
                 if (t < 1) { x = inset + (bounds.Width - inset * 2) * (float)t; y = inset; }
                 else if (t < 2) { x = bounds.Width - inset; y = inset + (bounds.Height - inset * 2) * (float)(t - 1); }
                 else if (t < 3) { x = bounds.Width - inset - (bounds.Width - inset * 2) * (float)(t - 2); y = bounds.Height - inset; }
                 else { x = inset; y = bounds.Height - inset - (bounds.Height - inset * 2) * (float)(t - 3); }
-                int d = (i - ledPhase + n) % n; int alpha = d < 8 ? 245 - d * 25 : 55;
+                int d = (i - pos + n) % n; int alpha = d < 10 ? 255 - d * 20 : 60;
                 using var bulb = new SolidBrush(activeTeam == "red" ? Color.FromArgb(alpha, 255, 35, 20) : Color.FromArgb(alpha, 20, 145, 255));
-                g.FillEllipse(bulb, x - 5, y - 5, 10, 10);
+                g.FillEllipse(bulb, x - 6, y - 6, 12, 12);
             }
         }
         using var font = new Font("Consolas", bounds.Height * 0.56f, FontStyle.Bold, GraphicsUnit.Pixel);
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         var rect = new RectangleF(10, 6, bounds.Width - 20, bounds.Height - 12);
-        using (var glow = new SolidBrush(Color.FromArgb(60, 255, 90, 40)))
+        Color ledColor = activeTeam == "red" ? Color.FromArgb(255, 255, 45, 35) : activeTeam == "blue" ? Color.FromArgb(255, 40, 150, 255) : Color.FromArgb(255, 255, 80, 40);
+        using (var glow = new SolidBrush(Color.FromArgb(70, ledColor)))
             foreach (var (dx, dy) in new[] { (-2f, 0f), (2f, 0f), (0f, -2f), (0f, 2f) })
                 g.DrawString(ledMessage, font, glow, new RectangleF(rect.X + dx, rect.Y + dy, rect.Width, rect.Height), sf);
-        using var brush = new SolidBrush(Color.FromArgb(255, 255, 80, 40));
+        using var brush = new SolidBrush(ledColor);
         g.DrawString(ledMessage, font, brush, rect, sf);
     }
 
@@ -309,7 +402,7 @@ public sealed class MainForm : Form
     {
         if (scenes.Count == 0) return;
         currentScene = ((index % scenes.Count) + scenes.Count) % scenes.Count; var s = scenes[currentScene];
-        Text = "Adivina la Palabra con 2 Fotos - Desafíos Locos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
+        Text = "DISEÑO v3 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
         answerRevealed = false; answerText = s.Answer;
         var oldA = photoA; var oldB = photoB;
         photoA = LoadPhoto(ResolveAssetPath(s.Image1)); photoB = LoadPhoto(ResolveAssetPath(s.Image2));
@@ -325,10 +418,27 @@ public sealed class MainForm : Form
         // aunque el programa se instale en otra carpeta o se actualice.
         return Path.Combine(AppContext.BaseDirectory, Path.GetFileName(path));
     }
+    // Lista de fondos incluidos (FONDO 1, 2, 3, FODNO 4...). Si una escena no tiene fondo propio se rota entre ellos.
+    void LoadBackgroundList()
+    {
+        bgFiles.Clear();
+        try
+        {
+            var found = Directory.EnumerateFiles(AppContext.BaseDirectory)
+                .Where(p => Regex.IsMatch(Path.GetFileName(p), @"^(FONDO|FODNO)\s*\d+\.(jpg|jpeg|png)$", RegexOptions.IgnoreCase))
+                .OrderBy(p => int.Parse(Regex.Match(Path.GetFileName(p), @"\d+").Value)).ToList();
+            // El naranja (FODNO 4) va primero para que la primera escena sea igual a la maqueta.
+            var first = found.FirstOrDefault(p => Regex.IsMatch(Path.GetFileName(p), @"\s*4\."));
+            if (first != null) { found.Remove(first); found.Insert(0, first); }
+            bgFiles.AddRange(found);
+        }
+        catch { }
+    }
     void SetSceneBackground(string path)
     {
         var old = sceneBackground; sceneBackground = null;
         var resolved = ResolveAssetPath(path);
+        if (string.IsNullOrWhiteSpace(path) && bgFiles.Count > 0) resolved = bgFiles[currentScene % bgFiles.Count];
         if (!string.IsNullOrWhiteSpace(resolved)) sceneBackground = LoadBitmap(resolved);
         old?.Dispose(); stage.Invalidate();
     }
@@ -368,7 +478,7 @@ public sealed class MainForm : Form
         if (key == redBuzzerKey) { Buzz("red"); return true; }
         if (key == blueBuzzerKey) { Buzz("blue"); return true; }
         if (key == Keys.Enter) { if (!started) BeginGame(); else if (!roundActive && buzzLocked) StartRound(); return true; }
-        if (key == Keys.Escape) { if (winnerScreen.Visible) winnerScreen.Visible = false; else if (isFullscreen) ToggleFullscreen(); else ResetBuzzers(); return true; }
+        if (key == Keys.Escape) { if (instructionsScreen.Visible) CloseInstructions(); else if (winnerScreen.Visible) winnerScreen.Visible = false; else if (isFullscreen) ToggleFullscreen(); else ResetBuzzers(); return true; }
         if (key == Keys.Left) { PreviousScene(); return true; }
         if (key == Keys.Right) { NextScene(); return true; }
         return base.ProcessCmdKey(ref msg, key);
@@ -383,7 +493,8 @@ public sealed class MainForm : Form
         var logoTab = new TabPage("LOGOTIPO") { BackColor = f.BackColor, ForeColor = Color.White };
         var scenesTab = new TabPage("ESCENAS") { BackColor = f.BackColor, ForeColor = Color.White };
         var buzzersTab = new TabPage("PULSADORES") { BackColor = f.BackColor, ForeColor = Color.White };
-        tabs.TabPages.AddRange(new[] { musicTab, logoTab, scenesTab, buzzersTab }); f.Controls.Add(tabs);
+        var answersTab = new TabPage("CORREGIR RESPUESTAS") { BackColor = f.BackColor, ForeColor = Color.White };
+        tabs.TabPages.AddRange(new[] { musicTab, logoTab, scenesTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
         var musicPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
         musicTab.Controls.Add(musicPanel);
         musicPanel.Controls.Add(new Label { Text = "ASIGNA UNA CANCIÓN DIFERENTE A CADA BOTÓN VERDE", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(4, 10, 4, 18) });
@@ -443,6 +554,23 @@ public sealed class MainForm : Form
         };
         buzzerPanel.Controls.Add(new Label { Text = "REINICIAR PULSADORES", AutoSize = true, ForeColor = Color.Gold, Margin = new Padding(3, 18, 3, 3) });
         buzzerPanel.Controls.Add(resetKeyBox); buzzerPanel.Controls.Add(resetKeyButton);
+        var answersPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(14), AutoScroll = true, WrapContents = false };
+        answersTab.Controls.Add(answersPanel);
+        answersPanel.Controls.Add(new Label { Text = "CORRIGE EL NOMBRE DE CADA RESPUESTA Y PRESIONA GUARDAR", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 11), Margin = new Padding(3, 4, 3, 10) });
+        var answerBoxes = new List<TextBox>();
+        for (int i = 0; i < scenes.Count; i++)
+        {
+            var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 2) };
+            row.Controls.Add(new Label { Text = (i + 1) + ".", Width = 40, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.White, Height = 28 });
+            var tb = new TextBox { Text = scenes[i].Answer, Width = 480, Font = new Font("Arial", 12, FontStyle.Bold) };
+            answerBoxes.Add(tb); row.Controls.Add(tb); answersPanel.Controls.Add(row);
+        }
+        var saveAnswers = new Button { Text = "GUARDAR RESPUESTAS CORREGIDAS", Width = 540, Height = 46, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 10), Margin = new Padding(3, 12, 3, 4) };
+        saveAnswers.Click += (_, _) => { for (int i = 0; i < answerBoxes.Count && i < scenes.Count; i++) scenes[i].Answer = answerBoxes[i].Text.Trim(); if (SaveConfig()) { MessageBox.Show(f, "¡Respuestas corregidas y guardadas!", "Desafíos Locos", MessageBoxButtons.OK, MessageBoxIcon.Information); } if (currentScene < scenes.Count && answerRevealed) answerText = scenes[currentScene].Answer.ToLowerInvariant(); else if (currentScene < scenes.Count) answerText = scenes[currentScene].Answer; stage.Invalidate(); };
+        answersPanel.Controls.Add(saveAnswers);
+        var reloadScenes = new Button { Text = "RECARGAR ESCENAS ORIGINALES DEL JUEGO", Width = 540, Height = 40, BackColor = Color.Goldenrod, ForeColor = Color.Black, Font = new Font("Arial Black", 9) };
+        reloadScenes.Click += (_, _) => { if (MessageBox.Show(f, "Se borrarán las escenas personalizadas y se cargarán otra vez las incluidas con el juego. ¿Continuar?", "Desafíos Locos", MessageBoxButtons.YesNo) != DialogResult.Yes) return; scenes.Clear(); LoadBundledScenes(); if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" }); SaveConfig(); f.Close(); ShowScene(0, false); OpenSettings(); };
+        answersPanel.Controls.Add(reloadScenes);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 62, BackColor = Color.FromArgb(18, 18, 24) };
         var saveAll = new Button { Text = "GUARDAR CAMBIOS", Width = 210, Height = 48, Left = 12, Top = 7, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 11) };
         saveAll.Click += (_, _) => { if (SaveConfig()) MessageBox.Show(f, "¡Todos los cambios se guardaron correctamente!", "Desafíos Locos", MessageBoxButtons.OK, MessageBoxIcon.Information); };
@@ -464,8 +592,8 @@ public sealed class MainForm : Form
         var b1 = new Button { Text = "CAMBIAR FOTO 1", Width = 450, Height = 42 }; b1.Click += (_, _) => { var path = PickImage(); if (path != null) s.Image1 = CopyToData(path, "escena" + (index + 1) + "_foto1" + Path.GetExtension(path)); }; panel.Controls.Add(b1);
         var b2 = new Button { Text = "CAMBIAR FOTO 2", Width = 450, Height = 42 }; b2.Click += (_, _) => { var path = PickImage(); if (path != null) s.Image2 = CopyToData(path, "escena" + (index + 1) + "_foto2" + Path.GetExtension(path)); }; panel.Controls.Add(b2);
         var bg = new Button { Text = "CAMBIAR FONDO DE ESTA ESCENA", Width = 450, Height = 42, BackColor = Color.Goldenrod, ForeColor = Color.Black }; bg.Click += (_, _) => { var path = PickImage(); if (path != null) s.Background = CopyToData(path, "escena" + (index + 1) + "_fondo" + Path.GetExtension(path)); }; panel.Controls.Add(bg);
-        panel.Controls.Add(new Label { Text = "O ELIGE UNO DE LOS 6 FONDOS QUE SUBISTE:", ForeColor = Color.Gold, AutoSize = true, Margin = new Padding(3, 12, 3, 4) });
-        string[] builtInBackgrounds = { "FONDO 1.jpg", "FONDO 2.jpg", "FONDO 3.jpg", "FODNO 4.jpg", "FONDO 5.jpg", "FONDO 6.jpg" };
+        panel.Controls.Add(new Label { Text = "O ELIGE UNO DE LOS FONDOS INCLUIDOS (si no eliges, rotan solos):", ForeColor = Color.Gold, AutoSize = true, Margin = new Padding(3, 12, 3, 4) });
+        var builtInBackgrounds = bgFiles.Select(x => Path.GetFileName(x)).ToArray();
         foreach (var file in builtInBackgrounds)
         {
             string selectedFile = file;
@@ -479,80 +607,53 @@ public sealed class MainForm : Form
     string? PickImage() { using var d = new OpenFileDialog { Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp" }; return d.ShowDialog(this) == DialogResult.OK ? d.FileName : null; }
     string CopyToData(string source, string name) { var dest = Path.Combine(dataDir, name); File.Copy(source, dest, true); return dest; }
     void SetImageLogo() { var old = logoArt; logoArt = null; if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) logoArt = LoadBitmap(logoPath); old?.Dispose(); stage.Invalidate(); }
+    static readonly Dictionary<string, string> SpellFix = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ROMPEXABEZAS"] = "ROMPECABEZAS", ["CANDADDO"] = "CANDADO", ["ARCOIRRIS"] = "ARCOÍRIS", ["CIENPIES"] = "CIEMPIÉS",
+        ["PIZAPAPELES"] = "PISAPAPELES", ["PUESRCO ESPIN"] = "PUERCOESPÍN", ["HIERVA BUENA"] = "HIERBABUENA", ["JIRASOL"] = "GIRASOL",
+        ["PIZARON"] = "PIZARRÓN", ["ESPANTA PAJAROS"] = "ESPANTAPÁJAROS", ["ESPANTAPAJAROS"] = "ESPANTAPÁJAROS", ["PARAAGUAS"] = "PARAGUAS",
+        ["LAVA MANOS"] = "LAVAMANOS", ["MONOPATIN"] = "MONOPATÍN", ["PANTALON"] = "PANTALÓN", ["AUTOMOVIL"] = "AUTOMÓVIL",
+        ["CORTA UÑAS"] = "CORTAÚÑAS", ["VIDEOJUEGO"] = "VIDEOJUEGOS", ["TELARAÑA"] = "TELARAÑA"
+    };
+
     void LoadBundledScenes()
     {
-        // Las imágenes se distribuyen junto al ejecutable. Cada pareja comparte respuesta;
-        // cuando existe un número repetido, se agrupan por ese número. Las fotos sueltas
-        // (como SALTAMONTES, archivos 29 y 30) se emparejan por la respuesta común.
-        var files = Directory.EnumerateFiles(AppContext.BaseDirectory)
-            .Where(p => Regex.IsMatch(Path.GetFileName(p), @"^\d+\s+", RegexOptions.IgnoreCase))
-            .Where(p => new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
-            .Select(p => new
-            {
-                Path = p,
-                Name = Path.GetFileName(p),
-                Number = int.Parse(Regex.Match(Path.GetFileName(p), @"^(\d+)\s+").Groups[1].Value)
-            })
-            .GroupBy(x => x.Number)
-            .OrderBy(g => g.Key)
-            .ToArray();
-
-        string ReadAnswer(string name)
+        // Cada escena = número + respuesta. Se ignoran los archivos duplicados con "#U00d1" en el nombre
+        // (se tratan como Ñ) y las dos fotos se ordenan por su terminación 1 / 2.
+        string Norm(string s) => s.Replace("#U00d1", "Ñ").Replace("#U00D1", "Ñ");
+        var items = new List<(int Number, string Answer, string Path, string Name, bool Clean, int Order)>();
+        foreach (var path in Directory.EnumerateFiles(AppContext.BaseDirectory))
         {
-            var match = Regex.Match(Path.GetFileNameWithoutExtension(name),
-                @"(?:RESPUESTA|REPUETA|RESPUETA)\s*(.+?)(?:\s*[12])?$", RegexOptions.IgnoreCase);
-            return match.Success
-                ? Regex.Replace(match.Groups[1].Value.Trim(), @"\s+", " ").ToUpperInvariant()
-                : "";
+            string file = Path.GetFileName(path);
+            if (!new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase)) continue;
+            var num = Regex.Match(file, @"^(\d+)\s+"); if (!num.Success) continue;
+            string stem = Norm(Path.GetFileNameWithoutExtension(file));
+            var m = Regex.Match(stem, @"(?:RESPUESTA|REPUETA|RESPUETA)\s*(.+?)\s*([12])?$", RegexOptions.IgnoreCase);
+            if (!m.Success) continue;
+            string answer = Regex.Replace(m.Groups[1].Value.Trim(), @"\s+", " ").ToUpperInvariant();
+            if (SpellFix.TryGetValue(answer, out var fixedAnswer)) answer = fixedAnswer;
+            int order = m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 9;
+            items.Add((int.Parse(num.Groups[1].Value), answer, path, file, !file.Contains("#U00", StringComparison.OrdinalIgnoreCase), order));
         }
-
-        int PhotoOrder(string name)
+        var built = new List<(int Number, Scene Scene)>();
+        var loose = new List<(int Number, string Answer, string Path, int Order)>();
+        int Overlap(string name, string key) { var w = Regex.Match(Regex.Replace(Norm(Path.GetFileNameWithoutExtension(name)), @"^\d+\s+", ""), @"^[A-ZÑa-zñ]+").Value.ToUpperInvariant(); int i = 0; while (i < w.Length && i < key.Length && w[i] == key[i]) i++; return i; }
+        foreach (var g in items.GroupBy(x => x.Number).OrderBy(k => k.Key))
         {
-            var match = Regex.Match(Path.GetFileNameWithoutExtension(name), @"([12])$");
-            return match.Success ? int.Parse(match.Groups[1].Value) : 9;
+            // De cada nombre de archivo repetido (con o sin #U00d1) se conserva el que tiene la Ñ correcta.
+            var files = g.GroupBy(x => Norm(x.Name), StringComparer.OrdinalIgnoreCase).Select(gr => gr.OrderByDescending(x => x.Clean).First()).ToList();
+            if (files.Count < 2) { foreach (var f1 in files) loose.Add((f1.Number, f1.Answer, f1.Path, f1.Order)); continue; }
+            string answer = g.First().Answer, key = Regex.Replace(answer, @"[^A-ZÑ]", "");
+            var ordered = files.OrderBy(x => x.Order).ThenByDescending(x => Overlap(x.Name, key)).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+            built.Add((g.Key, new Scene { Answer = answer, Image1 = Path.GetFileName(ordered[0].Path), Image2 = Path.GetFileName(ordered[1].Path) }));
         }
-
-        var pending = new List<(int Number, string Answer, string First, string Second)>();
-        var loosePhotos = new List<(int Number, string Name, string Path, string Answer)>();
-
-        foreach (var group in files)
+        // Fotos sueltas (por ejemplo SALTAMONTES, archivos 29 y 30): se emparejan por la respuesta común.
+        foreach (var lg in loose.GroupBy(x => x.Answer, StringComparer.OrdinalIgnoreCase))
         {
-            var pair = group.OrderBy(x => PhotoOrder(x.Name))
-                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            if (pair.Length == 2)
-            {
-                var answer = ReadAnswer(pair[0].Name);
-                if (!string.IsNullOrWhiteSpace(answer))
-                    pending.Add((group.Key, answer, pair[0].Path, pair[1].Path));
-            }
-            else if (pair.Length == 1)
-            {
-                var answer = ReadAnswer(pair[0].Name);
-                if (!string.IsNullOrWhiteSpace(answer))
-                    loosePhotos.Add((group.Key, pair[0].Name, pair[0].Path, answer));
-            }
+            var pair = lg.OrderBy(x => x.Order).ThenBy(x => x.Number).Take(2).ToArray();
+            if (pair.Length == 2) built.Add((pair.Min(x => x.Number), new Scene { Answer = lg.Key, Image1 = Path.GetFileName(pair[0].Path), Image2 = Path.GetFileName(pair[1].Path) }));
         }
-
-        foreach (var looseGroup in loosePhotos.GroupBy(x => x.Answer, StringComparer.OrdinalIgnoreCase))
-        {
-            var pair = looseGroup.OrderBy(x => PhotoOrder(x.Name))
-                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (pair.Length == 2)
-                pending.Add((pair.Min(x => x.Number), looseGroup.Key, pair[0].Path, pair[1].Path));
-        }
-
-        foreach (var scene in pending.OrderBy(x => x.Number))
-        {
-            scenes.Add(new Scene
-            {
-                Answer = scene.Answer,
-                Image1 = Path.GetFileName(scene.First),
-                Image2 = Path.GetFileName(scene.Second)
-            });
-        }
+        foreach (var entry in built.OrderBy(x => x.Number)) scenes.Add(entry.Scene);
     }
 
     void LoadConfig()
@@ -573,9 +674,30 @@ public sealed class MainForm : Form
     void StopAudio() { try { player?.Stop(); } catch { } player?.Dispose(); player = null; audio?.Dispose(); audio = null; }
     void Instructions()
     {
-        const string text = "Bienvenidos a Adivina la Palabra con dos Fotos. Presiona Enter para comenzar. El equipo rojo utiliza la tecla configurada en el menú y el equipo azul utiliza su tecla configurada. El primer equipo que presione su pulsador obtiene el turno para responder. El botón Nombre revela la respuesta. Las flechas cambian de escena. Los botones Punto Rojo y Punto Azul suman un punto. Los botones Gana Rojo y Gana Azul muestran al equipo ganador. Los cuatro botones verdes reproducen canciones de celebración. El botón Detener Canción detiene la música. La tecla M abre el menú de configuración.";
-        try { speech.SpeakAsyncCancelAll(); speech.SpeakAsync(text); } catch { MessageBox.Show(this, text, "Instrucciones del juego"); }
+        instructionsText = "Bienvenidos a Adivina la Palabra con dos Fotos. Presiona Enter para comenzar la cuenta regresiva de diez segundos. El equipo rojo utiliza la tecla " + redBuzzerKey + " y el equipo azul utiliza la tecla " + blueBuzzerKey + ". El primer equipo que presione su pulsador detiene el tiempo y obtiene el turno para responder; la pantalla luminosa cambia al color de ese equipo. El botón Reiniciar Pulsadores libera los pulsadores. El botón Nombre revela la respuesta. Las flechas cambian de escena. Los botones Punto Rojo y Punto Azul suman un punto. Los botones Gana Rojo y Gana Azul muestran al equipo ganador. Los cuatro botones verdes reproducen canciones de celebración y el botón Detener Canción las detiene. La tecla M abre el menú de configuración. ¡Mucha suerte!";
+        if (instructionsScreen.Controls.Count == 0)
+        {
+            instructionsScreen.Dock = DockStyle.Fill; instructionsScreen.BackColor = Color.FromArgb(22, 22, 34); instructionsScreen.Padding = new Padding(60, 30, 60, 20);
+            var title = new Label { Text = "INSTRUCCIONES DEL JUEGO", Dock = DockStyle.Top, Height = 90, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 34), ForeColor = Color.Gold };
+            instructionsBody.Dock = DockStyle.Fill; instructionsBody.Font = new Font("Arial", 27, FontStyle.Bold); instructionsBody.ForeColor = Color.White; instructionsBody.TextAlign = ContentAlignment.MiddleCenter;
+            var close = new Button { Text = "CERRAR", Dock = DockStyle.Bottom, Height = 70, BackColor = Color.Gold, ForeColor = Color.Black, Font = new Font("Arial Black", 18), FlatStyle = FlatStyle.Flat };
+            close.Click += (_, _) => CloseInstructions();
+            instructionsScreen.Controls.Add(instructionsBody); instructionsScreen.Controls.Add(title); instructionsScreen.Controls.Add(close);
+            typeTimer.Tick += (_, _) => { typedChars = Math.Min(instructionsText.Length, typedChars + 1); instructionsBody.Text = instructionsText.Substring(0, typedChars); if (typedChars >= instructionsText.Length) typeTimer.Stop(); };
+            speech.SpeakCompleted += (_, e) => { if (!e.Cancelled && instructionsScreen.Visible) BeginInvoke(new Action(() => { typeTimer.Stop(); instructionsBody.Text = instructionsText; })); };
+        }
+        Controls.Add(instructionsScreen); instructionsScreen.Visible = true; instructionsScreen.BringToFront();
+        typedChars = 0; instructionsBody.Text = ""; typeTimer.Start();
+        try
+        {
+            speech.SpeakAsyncCancelAll();
+            var es = speech.GetInstalledVoices().FirstOrDefault(v => v.Enabled && v.VoiceInfo.Culture.TwoLetterISOLanguageName == "es");
+            if (es != null) speech.SelectVoice(es.VoiceInfo.Name);
+            speech.SpeakAsync(instructionsText);
+        }
+        catch { typeTimer.Stop(); instructionsBody.Text = instructionsText; }
     }
+    void CloseInstructions() { typeTimer.Stop(); try { speech.SpeakAsyncCancelAll(); } catch { } instructionsScreen.Visible = false; }
     void ExitGame() { if (MessageBox.Show(this, "¿Deseas salir del juego?", "Desafíos Locos", MessageBoxButtons.YesNo) == DialogResult.Yes) Close(); }
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
