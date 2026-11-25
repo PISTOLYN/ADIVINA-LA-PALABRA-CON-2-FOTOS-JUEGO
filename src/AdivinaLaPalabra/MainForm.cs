@@ -1,4 +1,7 @@
 using NAudio.Wave;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Speech.Synthesis;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -15,19 +18,17 @@ public sealed class MainForm : Form
     readonly List<Scene> scenes = new();
     readonly string?[] audios = new string?[4];
     readonly Color orange = Color.FromArgb(239, 57, 8);
-    readonly Label redScore = new(), blueScore = new(), clock = new(), answerLabel = new(), sceneNumber = new(), status = new();
-    readonly PictureBox photo1 = new(), photo2 = new(), logoBox = new();
-    Panel redPhotoFrame = new(), bluePhotoFrame = new();
-    readonly Panel redPanel = new(), bluePanel = new(), gamePanel = new(), startScreen = new(), winnerScreen = new();
-    readonly BufferedPanel timerPanel = new();
-    readonly BufferedPanel ledPanel = new();
+    const string DefaultTitle = "ADIVINA LA PALABRA CON 2 FOTOS";
+    readonly BufferedPanel stage = new();
+    readonly Panel startScreen = new(), winnerScreen = new();
     readonly System.Windows.Forms.Timer ledAnimation = new() { Interval = 80 };
-    string ledMessage = "ADIVINA LA PALABRA CON 2 FOTOS"; string? activeTeam; int ledPhase;
+    string ledMessage = DefaultTitle; string? activeTeam; int ledPhase;
     readonly System.Windows.Forms.Timer countdown = new() { Interval = 100 };
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
     AudioFileReader? audio;
-    Image? currentBackground, timerArtwork;
+    Bitmap? sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB;
+    string answerText = "";
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P, resetKey = Keys.R;
     int seconds = 10, redPoints, bluePoints, currentScene, timerDeciseconds;
@@ -52,161 +53,187 @@ public sealed class MainForm : Form
         }
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
-        ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; ledPanel.Invalidate(); redPanel.Invalidate(); bluePanel.Invalidate(); }; ledAnimation.Start();
-        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, timerDeciseconds + 1); seconds = Math.Max(0, 10 - timerDeciseconds / 10); UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; stage.Invalidate(); }; ledAnimation.Start();
+        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, timerDeciseconds + 1); seconds = Math.Max(0, 10 - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
+
+    // ============ PANTALLA DE JUEGO ============
+    // Todo se dibuja sobre un lienzo de diseño de 1427 x 923 px que se escala a cualquier tamaño de ventana,
+    // para que se vea siempre igual que la maqueta (marcador, respuesta, marcos con focos y barra de botones).
+    const float DW = 1427f, DH = 923f;
+    static readonly RectangleF LedRect = new(28, 18, 1377, 74);
+    static readonly RectangleF RedCounterRect = new(48, 95, 265, 158);
+    static readonly RectangleF BlueCounterRect = new(1126, 94, 260, 153);
+    static readonly RectangleF AnswerBand = new(455, 132, 548, 90);
+    static readonly RectangleF LeftLogoRect = new(332, 110, 130, 138);
+    static readonly RectangleF RightLogoRect = new(997, 104, 130, 138);
+    static readonly RectangleF RedFrameRect = new(25, 255, 650, 580);
+    static readonly RectangleF BlueFrameRect = new(765, 255, 650, 580);
+    static readonly RectangleF PlusRect = new(680, 474, 88, 88);
+    static readonly RectangleF BarRect = new(28, 833, 1377, 84);
+    // Ventana transparente interior de los marcos (proporción dentro de la imagen recortada).
+    const float WinX = 0.1019f, WinY = 0.1668f, WinW = 0.7962f, WinH = 0.6714f;
+
+    sealed record Hit(float L, float R, Action Act);
+    Hit[] barHits = Array.Empty<Hit>();
+
     void BuildInterface()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(10, 6, 10, 6), BackColor = Color.Transparent, BackgroundImageLayout = ImageLayout.Stretch };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); Controls.Add(root);
-        ledPanel.Dock = DockStyle.Fill; ledPanel.BackColor = Color.FromArgb(18, 15, 20);
-        string ledPath = Path.Combine(AppContext.BaseDirectory, "PANTALLA LEDS.jpg");
-        if (File.Exists(ledPath)) { using var li = Image.FromFile(ledPath); ledPanel.BackgroundImage = new Bitmap(li); ledPanel.BackgroundImageLayout = ImageLayout.Stretch; }
-        ledPanel.Paint += (_, e) => DrawMarquee(e.Graphics, ledPanel.ClientRectangle); root.Controls.Add(ledPanel, 0, 0);
+        Bitmap? A(string f) => LoadBitmap(Path.Combine(AppContext.BaseDirectory, f));
+        defaultBackground = A("FODNO 4.jpg") ?? A("FONDO 4.jpg");
+        ledArt = A("PANTALLA LEDS.jpg"); barArt = A("BARRA DE BOTONES.jpg");
+        counterRedArt = A("CONTADOR ROJO.png"); counterBlueArt = A("CONTADOR AZUL.png");
+        frameRedArt = A("MARCO ROJO PNG.png"); frameBlueArt = A("MARCO AZUL PNG.png"); plusArt = A("SIGNO MAS PNG.png");
+        SetImageLogo();
 
-        var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.Transparent };
-        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-        BuildTeam(redPanel, "EQUIPO ROJO", redScore, Color.LightCoral);
-        BuildTeam(bluePanel, "EQUIPO AZUL", blueScore, Color.DeepSkyBlue);
-        var center = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
-        logoBox.SizeMode = PictureBoxSizeMode.Zoom; logoBox.Dock = DockStyle.Left; logoBox.Width = 68; logoBox.BackColor = Color.Transparent;
-        var brand = new Label { Text = "DESAFÍOS LOCOS", Dock = DockStyle.Top, Height = 25, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 11), ForeColor = Color.Gold, BackColor = Color.Transparent };
-        timerPanel.Dock = DockStyle.Fill; timerPanel.BackColor = Color.FromArgb(34, 30, 31); timerPanel.BackgroundImageLayout = ImageLayout.None; timerPanel.MinimumSize = new Size(150, 110);
-        var timerPath = Path.Combine(AppContext.BaseDirectory, "CRONOMETRO.png"); if (File.Exists(timerPath)) { using var ti = Image.FromFile(timerPath); timerArtwork = new Bitmap(ti); }
-        
-        clock.Visible = false;
-        timerPanel.Paint += (_, e) => DrawAnimatedClock(e.Graphics, timerPanel.ClientRectangle);
-        center.Controls.Add(timerPanel); center.Controls.Add(brand); center.Controls.Add(logoBox);
-        top.Controls.Add(redPanel, 0, 0); top.Controls.Add(center, 1, 0); top.Controls.Add(bluePanel, 2, 0); root.Controls.Add(top, 0, 1);
+        stage.Dock = DockStyle.Fill; stage.BackColor = orange;
+        stage.Paint += (_, e) => PaintStage(e.Graphics);
+        stage.MouseDown += (_, e) => { if (e.Button == MouseButtons.Left) ClickStage(e.Location); };
+        stage.MouseMove += (_, e) => stage.Cursor = HitAt(e.Location) != null ? Cursors.Hand : Cursors.Default;
+        Controls.Add(stage);
 
-        gamePanel.Dock = DockStyle.Fill; gamePanel.BackColor = Color.Transparent; gamePanel.BackgroundImageLayout = ImageLayout.Stretch; gamePanel.Padding = new Padding(12, 8, 12, 2);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Color.Transparent };
-        layout.RowCount = 2; layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        sceneNumber.Dock = DockStyle.Fill; sceneNumber.TextAlign = ContentAlignment.MiddleCenter; sceneNumber.Font = new Font("Arial Black", 17); sceneNumber.ForeColor = Color.Yellow; sceneNumber.BackColor = Color.Transparent;
-        var title = new Label { Text = "ADIVINA LA PALABRA CON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 24), ForeColor = Color.White, BackColor = Color.Transparent };
-        var pics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Color.Transparent };
-        pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48)); pics.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82)); pics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
-        ConfigurePhoto(photo1); ConfigurePhoto(photo2);
-        var plus = new Label { Text = "+", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 55), ForeColor = Color.Gold, BackColor = Color.Transparent };
-        redPhotoFrame = CreatePhotoFrame(photo1, "MARCO ROJO PNG.png", "red"); pics.Controls.Add(redPhotoFrame, 0, 0);
-        var plusImage = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.Transparent };
-        string plusPath = Path.Combine(AppContext.BaseDirectory, "SIGNO MAS PNG.png");
-        if (File.Exists(plusPath)) { using var pi = Image.FromFile(plusPath); plusImage.Image = new Bitmap(pi); pics.Controls.Add(plusImage, 1, 0); } else pics.Controls.Add(plus, 1, 0);
-        bluePhotoFrame = CreatePhotoFrame(photo2, "MARCO AZUL PNG.png", "blue"); pics.Controls.Add(bluePhotoFrame, 2, 0);
-        var answerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), Padding = new Padding(0) };
-        answerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        answerPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var answerTitle = new Label { Text = "RESPUESTA", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 16), ForeColor = Color.White, BackColor = Color.Transparent, Margin = new Padding(0) };
-        answerLabel.Dock = DockStyle.Fill; answerLabel.TextAlign = ContentAlignment.MiddleCenter; answerLabel.BackColor = Color.WhiteSmoke; answerLabel.ForeColor = Color.Red; answerLabel.Font = new Font("Arial Black", 38); answerLabel.AutoEllipsis = true; answerLabel.Margin = new Padding(0);
-        answerPanel.Controls.Add(answerTitle, 0, 0); answerPanel.Controls.Add(answerLabel, 0, 1);
-        layout.Controls.Add(answerPanel, 0, 0); layout.Controls.Add(pics, 0, 1);
-        gamePanel.Controls.Add(layout); root.Controls.Add(gamePanel, 0, 2);
+        // Zonas de clic sobre cada botón dibujado en "BARRA DE BOTONES.jpg" (fracciones del ancho de la barra).
+        barHits = new[]
+        {
+            new Hit(.020f, .082f, ExitGame),
+            new Hit(.088f, .172f, Instructions),
+            new Hit(.178f, .237f, () => ShowWinner("red")),
+            new Hit(.243f, .302f, () => ShowWinner("blue")),
+            new Hit(.308f, .373f, ResetBuzzers),
+            new Hit(.380f, .447f, () => PlayCelebration(0)),
+            new Hit(.453f, .520f, () => PlayCelebration(1)),
+            new Hit(.527f, .592f, () => PlayCelebration(2)),
+            new Hit(.598f, .665f, () => PlayCelebration(3)),
+            new Hit(.672f, .727f, StopAudio),
+            new Hit(.733f, .789f, RevealAnswer),
+            new Hit(.796f, .851f, () => AddPoint("red")),
+            new Hit(.857f, .910f, () => AddPoint("blue")),
+            new Hit(.915f, .950f, PreviousScene),
+            new Hit(.953f, .985f, NextScene),
+        };
 
-        var barBackground = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(20, 20, 20), Padding = new Padding(12, 5, 12, 5) };
-        string barPath = Path.Combine(AppContext.BaseDirectory, "BARRA DE BOTONES.jpg");
-        if (File.Exists(barPath)) { using var bi = Image.FromFile(barPath); barBackground.BackgroundImage = new Bitmap(bi); barBackground.BackgroundImageLayout = ImageLayout.Stretch; }
-        var bar = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, BackColor = Color.Transparent, Padding = new Padding(2) }; barBackground.Controls.Add(bar);
-        AddButton(bar, "SALIR", Color.White, Color.Black, ExitGame, 78);
-        AddButton(bar, "INSTRUCCIONES", Color.MediumPurple, Color.White, Instructions, 112);
-        AddButton(bar, "GANA ROJO", Color.Red, Color.White, () => ShowWinner("red"), 88);
-        AddButton(bar, "GANA AZUL", Color.RoyalBlue, Color.White, () => ShowWinner("blue"), 88);
-        AddButton(bar, "REINICIAR PULSADORES", Color.Purple, Color.White, ResetBuzzers, 126);
-        for (int i = 0; i < 4; i++) { int n = i; AddButton(bar, "CELEBRACIÓN " + (i + 1), Color.LawnGreen, Color.Black, () => PlayCelebration(n), 96); }
-        AddButton(bar, "DETENER CANCIÓN", Color.Gold, Color.Black, StopAudio, 100);
-        AddButton(bar, "NOMBRE", Color.DeepSkyBlue, Color.Black, RevealAnswer, 76);
-        AddButton(bar, "PUNTO ROJO", Color.Red, Color.White, () => AddPoint("red"), 88);
-        AddButton(bar, "PUNTO AZUL", Color.RoyalBlue, Color.White, () => AddPoint("blue"), 88);
-        AddButton(bar, "◀", Color.LightSkyBlue, Color.Black, PreviousScene, 50);
-        AddButton(bar, "▶", Color.IndianRed, Color.White, NextScene, 50);
-        root.Controls.Add(barBackground, 0, 3);
-
-        status.Visible = false;
         var fullscreen = new Button { Text = "⛶", Width = 54, Height = 32, BackColor = Color.LimeGreen, ForeColor = Color.Black, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right, Font = new Font("Arial Black", 15) };
         fullscreen.Location = new Point(ClientSize.Width - 68, 3); fullscreen.Click += (_, _) => ToggleFullscreen(); Controls.Add(fullscreen); fullscreen.BringToFront();
-        logoBox.BringToFront();
-        Scores(); UpdateClock();
     }
 
-    void BuildTeam(Panel panel, string name, Label score, Color accent)
+    PointF ToDesign(Point p)
     {
-        panel.Dock = DockStyle.Fill; panel.Margin = new Padding(5); panel.BackColor = Color.Transparent; panel.BackgroundImageLayout = ImageLayout.Zoom;
-        string counterFile = name.Contains("ROJO", StringComparison.OrdinalIgnoreCase) ? "CONTADOR ROJO.png" : "CONTADOR AZUL.png";
-        string counterPath = Path.Combine(AppContext.BaseDirectory, counterFile);
-        if (File.Exists(counterPath)) { using var counterImage = Image.FromFile(counterPath); panel.BackgroundImage = new Bitmap(counterImage); }
-        var title = new Label { Text = name, Dock = DockStyle.Top, Height = 42, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 19), ForeColor = accent, BackColor = Color.Transparent };
-        score.Dock = DockStyle.Fill; score.TextAlign = ContentAlignment.MiddleCenter; score.Font = new Font("Arial Black", 65); score.ForeColor = Color.White; score.BackColor = Color.Transparent; score.Padding = new Padding(0, 0, 0, 34);
-        panel.Controls.Add(score); panel.Controls.Add(title);
-        panel.Paint += (_, e) => {
-            if (activeTeam != (name.Contains("ROJO", StringComparison.OrdinalIgnoreCase) ? "red" : "blue")) return;
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            int pulse = 130 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 120);
-            using var pen = new Pen(name.Contains("ROJO", StringComparison.OrdinalIgnoreCase) ? Color.FromArgb(pulse, 255, 35, 20) : Color.FromArgb(pulse, 30, 145, 255), 7);
-            e.Graphics.DrawRectangle(pen, 5, 5, Math.Max(1, panel.Width - 11), Math.Max(1, panel.Height - 11));
-        };
+        var cr = stage.ClientRectangle; float s = Math.Min(cr.Width / DW, cr.Height / DH);
+        return new PointF((p.X - (cr.Width - DW * s) / 2f) / s, (p.Y - (cr.Height - DH * s) / 2f) / s);
     }
-    void ConfigurePhoto(PictureBox p) { p.Dock = DockStyle.Fill; p.Margin = new Padding(0); p.BackColor = Color.Transparent; p.BorderStyle = BorderStyle.None; p.SizeMode = PictureBoxSizeMode.Zoom; }
-    void AddButton(FlowLayoutPanel bar, string text, Color bg, Color fg, Action action, int? width = null)
+    Hit? HitAt(Point p)
     {
-        var b = new Button { Text = text, Width = width ?? Math.Max(88, text.Length * 8), Height = 66, BackColor = bg, ForeColor = fg, Font = new Font("Arial Black", 9), FlatStyle = FlatStyle.Flat, Margin = new Padding(3) };
-        b.Click += (_, _) => action(); bar.Controls.Add(b);
+        var d = ToDesign(p);
+        if (!BarRect.Contains(d)) return null;
+        float f = (d.X - BarRect.X) / BarRect.Width;
+        return barHits.FirstOrDefault(h => f >= h.L && f <= h.R);
     }
-    void Scores() { redScore.Text = redPoints.ToString(); blueScore.Text = bluePoints.ToString(); }
-    void UpdateClock() { timerPanel.Invalidate(); }
-    void DrawAnimatedClock(Graphics g, Rectangle bounds)
+    void ClickStage(Point p) => HitAt(p)?.Act();
+
+    void PaintStage(Graphics g)
     {
-        if (bounds.Width <= 0 || bounds.Height <= 0 || timerArtwork == null) return;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-        const float sourceW = 1047f, sourceH = 1008f;
-        float scale = Math.Min(bounds.Width / sourceW, bounds.Height / sourceH);
-        float ox = bounds.Left + (bounds.Width - sourceW * scale) / 2f;
-        float oy = bounds.Top + (bounds.Height - sourceH * scale) / 2f;
-        var state = g.Save();
-        g.TranslateTransform(ox, oy); g.ScaleTransform(scale, scale);
-        // Fondo y animación se pintan juntos en un único búfer, sin parpadeos.
-        g.DrawImage(timerArtwork, 0, 0, sourceW, sourceH);
-        int lit = Math.Clamp(timerDeciseconds * 6 / 10, 0, 60);
-        // Apaga primero las 60 rayitas impresas en la imagen; después enciende solo las que corresponden al tiempo.
-        for (int i = 0; i < 60; i++)
+        var cr = stage.ClientRectangle; if (cr.Width <= 0 || cr.Height <= 0) return;
+        g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        var bg = sceneBackground ?? defaultBackground;
+        if (bg != null) g.DrawImage(bg, cr); else g.Clear(orange);
+        float s = Math.Min(cr.Width / DW, cr.Height / DH);
+        g.TranslateTransform((cr.Width - DW * s) / 2f, (cr.Height - DH * s) / 2f); g.ScaleTransform(s, s);
+
+        // Marcador luminoso superior
+        if (ledArt != null) g.DrawImage(ledArt, LedRect);
+        var st = g.Save(); g.TranslateTransform(LedRect.X, LedRect.Y); DrawMarquee(g, new Rectangle(0, 0, (int)LedRect.Width, (int)LedRect.Height)); g.Restore(st);
+
+        // Contadores de equipo
+        if (counterRedArt != null) g.DrawImage(counterRedArt, RedCounterRect);
+        if (counterBlueArt != null) g.DrawImage(counterBlueArt, BlueCounterRect);
+        DrawScore(g, RedCounterRect, redPoints); DrawScore(g, BlueCounterRect, bluePoints);
+
+        // Respuesta, con el logotipo a cada lado
+        DrawOutlined(g, "RESPUESTA", 31, new RectangleF(AnswerBand.X, 96, AnswerBand.Width, 38), Brushes.White, Color.Black, 5f);
+        using (var band = new SolidBrush(Color.FromArgb(244, 244, 244))) g.FillRectangle(band, AnswerBand);
+        DrawAnswer(g);
+        DrawZoom(g, logoArt, LeftLogoRect); DrawZoom(g, logoArt, RightLogoRect);
+
+        // Fotos (debajo) y marcos con focos (encima)
+        DrawCover(g, photoA, WindowOf(RedFrameRect)); DrawCover(g, photoB, WindowOf(BlueFrameRect));
+        if (frameRedArt != null) g.DrawImage(frameRedArt, RedFrameRect);
+        if (frameBlueArt != null) g.DrawImage(frameBlueArt, BlueFrameRect);
+        if (plusArt != null) g.DrawImage(plusArt, PlusRect); else DrawOutlined(g, "+", 80, PlusRect, Brushes.Gold, Color.Black, 4f);
+
+        // Resplandor del equipo que ganó el pulsador
+        if (activeTeam != null)
         {
-            double a = (-90.0 + i * 6.0) * Math.PI / 180.0;
-            float cx = 523.5f + (float)Math.Cos(a) * 410f;
-            float cy = 504f + (float)Math.Sin(a) * 410f;
-            var markState = g.Save();
-            g.TranslateTransform(cx, cy); g.RotateTransform((float)(i * 6));
-            using (var off = new SolidBrush(Color.FromArgb(255, 65, 65, 67))) g.FillRectangle(off, -12, -40, 24, 80);
-            if (i < lit)
-            {
-                using (var glow = new SolidBrush(Color.FromArgb(85, 0, 255, 100))) g.FillEllipse(glow, -16, -43, 32, 86);
-                using (var green = new SolidBrush(Color.FromArgb(255, 0, 245, 90))) g.FillRectangle(green, -11, -39, 22, 78);
-            }
-            g.Restore(markState);
+            int pulse = 110 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 140);
+            bool red = activeTeam == "red";
+            using var pen = new Pen(red ? Color.FromArgb(pulse, 255, 40, 20) : Color.FromArgb(pulse, 25, 140, 255), 8) { LineJoin = LineJoin.Round };
+            var fr = red ? RedFrameRect : BlueFrameRect; fr.Inflate(-4, -4); g.DrawRectangle(pen, fr.X, fr.Y, fr.Width, fr.Height);
+            var cn = red ? RedCounterRect : BlueCounterRect; cn.Inflate(-2, -2); g.DrawRectangle(pen, cn.X, cn.Y, cn.Width, cn.Height);
         }
-        // Oculta tanto el 10 como la palabra SEG que vienen impresos en el archivo base.
-        using (var dark = new SolidBrush(Color.FromArgb(255, 34, 30, 31))) g.FillRectangle(dark, 350, 345, 350, 430);
-        using (var font = new Font("Arial", 184, FontStyle.Bold, GraphicsUnit.Pixel))
-        using (var brush = new SolidBrush(Color.Lime))
-        using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            g.DrawString(seconds.ToString("00"), font, brush, new RectangleF(350, 350, 350, 275), sf);
-        using (var segFont = new Font("Arial", 76, FontStyle.Bold, GraphicsUnit.Pixel))
-        using (var segBrush = new SolidBrush(Color.Lime))
-        using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-            g.DrawString("SEG", segFont, segBrush, new RectangleF(350, 670, 350, 100), sf);
-        g.Restore(state);
+
+        // Barra de botones
+        if (barArt != null) g.DrawImage(barArt, BarRect);
     }
-    void SetStatus(string text, string? team) { status.Text = text; activeTeam = team; ledMessage = team == "red" ? "TURNO PARA EL EQUIPO ROJO" : team == "blue" ? "TURNO PARA EL EQUIPO AZUL" : text; ledPhase = 0; ledPanel.Invalidate(); redPanel.BackColor = Color.Transparent; bluePanel.BackColor = Color.Transparent; }
+
+    static RectangleF WindowOf(RectangleF f)
+    {
+        var r = new RectangleF(f.X + f.Width * WinX, f.Y + f.Height * WinY, f.Width * WinW, f.Height * WinH);
+        r.Inflate(3, 3); return r;   // un poco más grande para que el marco lo tape sin dejar rendijas
+    }
+    static void DrawCover(Graphics g, Image? img, RectangleF dest)
+    {
+        if (img == null) return;
+        float sc = Math.Max(dest.Width / img.Width, dest.Height / img.Height);
+        float sw = dest.Width / sc, sh = dest.Height / sc;
+        var src = new RectangleF((img.Width - sw) / 2f, (img.Height - sh) / 2f, sw, sh);
+        using var ia = new ImageAttributes(); ia.SetWrapMode(WrapMode.TileFlipXY);
+        g.DrawImage(img, Rectangle.Round(dest), src.X, src.Y, src.Width, src.Height, GraphicsUnit.Pixel, ia);
+    }
+    static void DrawZoom(Graphics g, Image? img, RectangleF box)
+    {
+        if (img == null) return;
+        float sc = Math.Min(box.Width / img.Width, box.Height / img.Height);
+        float w = img.Width * sc, h = img.Height * sc;
+        g.DrawImage(img, box.X + (box.Width - w) / 2f, box.Y + (box.Height - h) / 2f, w, h);
+    }
+    static void DrawOutlined(Graphics g, string text, float px, RectangleF r, Brush fill, Color outline, float width)
+    {
+        using var font = new Font("Arial Black", px, FontStyle.Regular, GraphicsUnit.Pixel);
+        using var path = new GraphicsPath(); using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        path.AddString(text, font.FontFamily, (int)font.Style, px, r, sf);
+        using var pen = new Pen(outline, width) { LineJoin = LineJoin.Round };
+        g.DrawPath(pen, path); g.FillPath(fill, path);
+    }
+    void DrawScore(Graphics g, RectangleF counter, int points)
+    {
+        var box = new RectangleF(counter.X + counter.Width * 0.56f, counter.Y + counter.Height * 0.36f, counter.Width * 0.38f, counter.Height * 0.50f);
+        using var font = new Font("Arial Black", 66, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        using (var shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0))) g.DrawString(points.ToString(), font, shadow, new RectangleF(box.X + 3, box.Y + 3, box.Width, box.Height), sf);
+        g.DrawString(points.ToString(), font, Brushes.WhiteSmoke, box, sf);
+    }
+    void DrawAnswer(Graphics g)
+    {
+        string text = answerRevealed ? answerText : "¿ ? ¿ ?";
+        float px = 84;
+        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+        Font font = new("Arial", px, FontStyle.Bold, GraphicsUnit.Pixel);
+        while (px > 20 && g.MeasureString(text, font, 10000, sf).Width > AnswerBand.Width - 24) { font.Dispose(); px -= 4; font = new Font("Arial", px, FontStyle.Bold, GraphicsUnit.Pixel); }
+        using (font) using (var red = new SolidBrush(Color.FromArgb(240, 0, 0))) g.DrawString(text, font, red, AnswerBand, sf);
+    }
+
+    void SetStatus(string text, string? team) { activeTeam = team; ledMessage = team == "red" ? "TURNO PARA EL EQUIPO ROJO" : team == "blue" ? "TURNO PARA EL EQUIPO AZUL" : text; ledPhase = 0; stage.Invalidate(); }
+    void Scores() { stage.Invalidate(); }
+    void UpdateClock() { stage.Invalidate(); }
+
     void DrawMarquee(Graphics g, Rectangle bounds)
     {
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
-        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var brush = new SolidBrush(Color.FromArgb(255, 255, 115, 60));
-        using var font = new Font("Consolas", Math.Max(20, bounds.Height * 0.48f), FontStyle.Bold, GraphicsUnit.Pixel);
-        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         if (activeTeam != null)
         {
-            // Focos recorriendo el contorno completo en círculo, en el color del equipo que ganó el pulsador.
+            // Focos recorriendo el contorno completo, en el color del equipo que ganó el pulsador.
             int n = 64, inset = 13;
             for (int i = 0; i < n; i++)
             {
@@ -221,28 +248,73 @@ public sealed class MainForm : Form
                 g.FillEllipse(bulb, x - 5, y - 5, 10, 10);
             }
         }
-        g.DrawString(ledMessage, font, brush, new RectangleF(10, 8, bounds.Width - 20, bounds.Height - 16), sf);
+        using var font = new Font("Consolas", bounds.Height * 0.56f, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        var rect = new RectangleF(10, 6, bounds.Width - 20, bounds.Height - 12);
+        using (var glow = new SolidBrush(Color.FromArgb(60, 255, 90, 40)))
+            foreach (var (dx, dy) in new[] { (-2f, 0f), (2f, 0f), (0f, -2f), (0f, 2f) })
+                g.DrawString(ledMessage, font, glow, new RectangleF(rect.X + dx, rect.Y + dy, rect.Width, rect.Height), sf);
+        using var brush = new SolidBrush(Color.FromArgb(255, 255, 80, 40));
+        g.DrawString(ledMessage, font, brush, rect, sf);
     }
-    Panel CreatePhotoFrame(PictureBox photo, string file, string team)
+
+    // ---------- Carga de imágenes ----------
+    static Bitmap? LoadBitmap(string path)
     {
-        var frame = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(54, 58, 54, 58), BackgroundImageLayout = ImageLayout.Stretch };
-        string path = Path.Combine(AppContext.BaseDirectory, file);
-        if (File.Exists(path)) { using var im = Image.FromFile(path); frame.BackgroundImage = new Bitmap(im); }
-        photo.Dock = DockStyle.Fill; photo.Margin = new Padding(0); frame.Controls.Add(photo);
-        frame.Paint += (_, e) => { if (activeTeam != team) return; int pulse = 100 + (int)(Math.Abs(Math.Sin(ledPhase * Math.PI / 12)) * 150); using var pen = new Pen(team == "red" ? Color.FromArgb(pulse, 255, 40, 20) : Color.FromArgb(pulse, 20, 130, 255), 8); e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias; e.Graphics.DrawRectangle(pen, 4, 4, Math.Max(1, frame.Width - 9), Math.Max(1, frame.Height - 9)); };
-        return frame;
+        try { if (!File.Exists(path)) return null; using var img = Image.FromFile(path); return new Bitmap(img); } catch { return null; }
     }
+    // Carga una foto de escena: recorta los márgenes transparentes y la reduce para dibujarla rápido.
+    static Bitmap? LoadPhoto(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            using var src = Image.FromFile(path);
+            using var bmp = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppArgb);
+            using (var g0 = Graphics.FromImage(bmp)) g0.DrawImage(src, 0, 0, src.Width, src.Height);
+            var box = OpaqueBounds(bmp);
+            float k = Math.Min(1f, 1200f / Math.Max(box.Width, box.Height));
+            var result = new Bitmap(Math.Max(1, (int)(box.Width * k)), Math.Max(1, (int)(box.Height * k)), PixelFormat.Format32bppPArgb);
+            using var g = Graphics.FromImage(result); g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.DrawImage(bmp, new Rectangle(0, 0, result.Width, result.Height), box, GraphicsUnit.Pixel);
+            return result;
+        }
+        catch { return null; }
+    }
+    static Rectangle OpaqueBounds(Bitmap bmp)
+    {
+        int w = bmp.Width, h = bmp.Height;
+        var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int stride = data.Stride; var buf = new byte[Math.Abs(stride) * h]; Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+            bool RowHas(int y) { int o = y * stride; for (int x = 0; x < w; x++) if (buf[o + x * 4 + 3] > 24) return true; return false; }
+            bool ColHas(int x, int t, int b) { for (int y = t; y <= b; y++) if (buf[y * stride + x * 4 + 3] > 24) return true; return false; }
+            int top = 0; while (top < h && !RowHas(top)) top++;
+            if (top >= h) return new Rectangle(0, 0, w, h);
+            int bot = h - 1; while (bot > top && !RowHas(bot)) bot--;
+            int left = 0; while (left < w - 1 && !ColHas(left, top, bot)) left++;
+            int right = w - 1; while (right > left && !ColHas(right, top, bot)) right--;
+            return new Rectangle(left, top, right - left + 1, bot - top + 1);
+        }
+        finally { bmp.UnlockBits(data); }
+    }
+
     void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus("PULSADORES REINICIADOS · LISTOS", null); }
+    void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); SetStatus(team == "red" ? "PUNTO PARA EQUIPO ROJO" : "PUNTO PARA EQUIPO AZUL", team); }
-    void RevealAnswer() { answerRevealed = true; answerLabel.Text = scenes[currentScene].Answer; }
+    void RevealAnswer() { answerRevealed = true; answerText = scenes[currentScene].Answer.ToLowerInvariant(); stage.Invalidate(); }
     void ShowScene(int index, bool startTimer)
     {
         if (scenes.Count == 0) return;
         currentScene = ((index % scenes.Count) + scenes.Count) % scenes.Count; var s = scenes[currentScene];
-        sceneNumber.Text = "ESCENA " + (currentScene + 1) + " / " + scenes.Count;
-        answerRevealed = false; answerLabel.Text = "¿ ? ¿ ?"; SetImage(photo1, s.Image1); SetImage(photo2, s.Image2); SetSceneBackground(s.Background);
+        Text = "Adivina la Palabra con 2 Fotos - Desafíos Locos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
+        answerRevealed = false; answerText = s.Answer;
+        var oldA = photoA; var oldB = photoB;
+        photoA = LoadPhoto(ResolveAssetPath(s.Image1)); photoB = LoadPhoto(ResolveAssetPath(s.Image2));
+        oldA?.Dispose(); oldB?.Dispose();
+        SetSceneBackground(s.Background);
         ResetBuzzers(); if (startTimer && started) StartRound();
     }
     string ResolveAssetPath(string path)
@@ -253,20 +325,12 @@ public sealed class MainForm : Form
         // aunque el programa se instale en otra carpeta o se actualice.
         return Path.Combine(AppContext.BaseDirectory, Path.GetFileName(path));
     }
-    void SetImage(PictureBox box, string path)
-    {
-        var old = box.Image; box.Image = null; old?.Dispose();
-        var resolved = ResolveAssetPath(path);
-        if (!string.IsNullOrWhiteSpace(resolved) && File.Exists(resolved)) { using var img = Image.FromFile(resolved); box.Image = new Bitmap(img); }
-    }
     void SetSceneBackground(string path)
     {
-        var old = currentBackground; currentBackground = null; gamePanel.BackgroundImage = null; old?.Dispose();
+        var old = sceneBackground; sceneBackground = null;
         var resolved = ResolveAssetPath(path);
-        if (!string.IsNullOrWhiteSpace(resolved) && File.Exists(resolved)) { using var img = Image.FromFile(resolved); currentBackground = new Bitmap(img); }
-        gamePanel.BackgroundImage = currentBackground;
-        if (Controls.Count > 0 && Controls[0] is TableLayoutPanel root) { root.BackgroundImage = currentBackground; root.BackgroundImageLayout = ImageLayout.Stretch; }
-        BackgroundImage = currentBackground; BackgroundImageLayout = ImageLayout.Stretch;
+        if (!string.IsNullOrWhiteSpace(resolved)) sceneBackground = LoadBitmap(resolved);
+        old?.Dispose(); stage.Invalidate();
     }
     void PreviousScene() { if (scenes.Count > 0) ShowScene(currentScene - 1, true); }
     void NextScene() { if (scenes.Count > 0) ShowScene(currentScene + 1, true); }
@@ -279,7 +343,6 @@ public sealed class MainForm : Form
         var splashFullscreen = new Button { Text = "⛶", Width = 54, Height = 32, Left = ClientSize.Width - 66, Top = 5, Anchor = AnchorStyles.Top | AnchorStyles.Right, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 15) };
         splashFullscreen.Click += (_, _) => ToggleFullscreen(); startScreen.Controls.Add(splashFullscreen); splashFullscreen.BringToFront();
         Controls.Add(startScreen); startScreen.BringToFront();
-        if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) { try { logoBox.Image = Image.FromFile(logoPath); } catch { } }
     }
     void BeginGame() { if (started) return; started = true; startScreen.Visible = false; ShowScene(currentScene, true); }
     void ShowWinner(string team)
@@ -415,7 +478,7 @@ public sealed class MainForm : Form
     }
     string? PickImage() { using var d = new OpenFileDialog { Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp" }; return d.ShowDialog(this) == DialogResult.OK ? d.FileName : null; }
     string CopyToData(string source, string name) { var dest = Path.Combine(dataDir, name); File.Copy(source, dest, true); return dest; }
-    void SetImageLogo() { if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) { var old = logoBox.Image; using var img = Image.FromFile(logoPath); logoBox.Image = new Bitmap(img); old?.Dispose(); } }
+    void SetImageLogo() { var old = logoArt; logoArt = null; if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) logoArt = LoadBitmap(logoPath); old?.Dispose(); stage.Invalidate(); }
     void LoadBundledScenes()
     {
         // Las imágenes se distribuyen junto al ejecutable. Cada pareja comparte respuesta;
@@ -514,5 +577,10 @@ public sealed class MainForm : Form
         try { speech.SpeakAsyncCancelAll(); speech.SpeakAsync(text); } catch { MessageBox.Show(this, text, "Instrucciones del juego"); }
     }
     void ExitGame() { if (MessageBox.Show(this, "¿Deseas salir del juego?", "Desafíos Locos", MessageBoxButtons.YesNo) == DialogResult.Yes) Close(); }
-    protected override void OnFormClosed(FormClosedEventArgs e) { countdown.Stop(); ledAnimation.Stop(); StopAudio(); currentBackground?.Dispose(); timerArtwork?.Dispose(); speech.Dispose(); base.OnFormClosed(e); }
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        countdown.Stop(); ledAnimation.Stop(); StopAudio();
+        foreach (var b in new[] { sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB }) b?.Dispose();
+        speech.Dispose(); base.OnFormClosed(e);
+    }
 }
