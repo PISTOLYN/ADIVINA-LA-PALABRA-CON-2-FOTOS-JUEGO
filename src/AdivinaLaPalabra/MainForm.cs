@@ -23,12 +23,14 @@ public sealed class MainForm : Form
     readonly Panel startScreen = new(), winnerScreen = new();
     readonly System.Windows.Forms.Timer ledAnimation = new() { Interval = 80 };
     string ledMessage = DefaultTitle; string? activeTeam; int ledPhase, ledTick;
-    readonly System.Windows.Forms.Timer countdown = new() { Interval = 100 };
+    readonly System.Windows.Forms.Timer countdown = new() { Interval = 50 };
     readonly SpeechSynthesizer speech = new();
     WaveOutEvent? player;
     AudioFileReader? audio;
     Bitmap? sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB;
     string answerText = "";
+    Bitmap? frameRedOff, frameBlueOff, stageCache; Size cacheSize; string? cacheTeam; bool cacheDirty = true;
+    readonly System.Diagnostics.Stopwatch countdownWatch = new();
     RectangleF redFrame = RedFrameBox, blueFrame = BlueFrameBox, redWin = new(WinX, WinY, WinW, WinH), blueWin = new(WinX, WinY, WinW, WinH);
     readonly List<string> bgFiles = new();
     Hit? pressedHit, flashHit; DateTime flashUntil;
@@ -60,8 +62,8 @@ public sealed class MainForm : Form
         }
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
-        ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; stage.Invalidate(); }; ledAnimation.Start();
-        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, timerDeciseconds + 1); seconds = Math.Max(0, 10 - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; if (activeTeam != null || pressedHit != null || DateTime.UtcNow < flashUntil) stage.Invalidate(); }; ledAnimation.Start();
+        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, (int)(countdownWatch.ElapsedMilliseconds / 100)); seconds = Math.Max(0, 10 - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
@@ -96,6 +98,7 @@ public sealed class MainForm : Form
         frameRedArt = T("MARCO ROJO ALA MEDIDA.png") ?? T("MARCO ROJO PNG.png");
         frameBlueArt = T("MARCO AZUL ALA MEDIDA.png") ?? T("MARCO AZUL PNG.png");
         plusArt = T("SIGNO MAS PNG.png");
+        frameRedOff = MakeBulbsOff(frameRedArt); frameBlueOff = MakeBulbsOff(frameBlueArt);
         redWin = FindWindow(frameRedArt); blueWin = FindWindow(frameBlueArt);
         redFrame = FitRect(frameRedArt, RedFrameBox); blueFrame = FitRect(frameBlueArt, BlueFrameBox);
         LoadBackgroundList();
@@ -110,6 +113,7 @@ public sealed class MainForm : Form
             if (e.Button == MouseButtons.Left && h != null && ReferenceEquals(HitAt(e.Location), h)) { flashHit = h; flashUntil = DateTime.UtcNow.AddMilliseconds(240); stage.Invalidate(); h.Act(); }
             else stage.Invalidate();
         };
+        stage.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left && AnswerBand.Contains(ToDesign(e.Location))) EditCurrentAnswer(); };
         stage.MouseMove += (_, e) => stage.Cursor = HitAt(e.Location) != null ? Cursors.Hand : Cursors.Default;
         Controls.Add(stage);
 
@@ -154,33 +158,22 @@ public sealed class MainForm : Form
     void PaintStage(Graphics g)
     {
         var cr = stage.ClientRectangle; if (cr.Width <= 0 || cr.Height <= 0) return;
-        g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        // Capa estática (fondo, marcos, fotos, barra) dibujada una sola vez: así el juego va fluido y el reloj no se atrasa.
+        if (stageCache == null || cacheSize != cr.Size || cacheDirty || cacheTeam != activeTeam)
+        {
+            stageCache?.Dispose(); stageCache = new Bitmap(cr.Width, cr.Height, PixelFormat.Format32bppPArgb);
+            using (var cg = Graphics.FromImage(stageCache)) RenderStatic(cg, cr);
+            cacheSize = cr.Size; cacheTeam = activeTeam; cacheDirty = false;
+        }
+        g.DrawImageUnscaled(stageCache, 0, 0);
+        g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBilinear;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-        var bg = sceneBackground ?? defaultBackground;
-        if (bg != null) g.DrawImage(bg, cr); else g.Clear(orange);
         float s = Math.Min(cr.Width / DW, cr.Height / DH);
         g.TranslateTransform((cr.Width - DW * s) / 2f, (cr.Height - DH * s) / 2f); g.ScaleTransform(s, s);
 
-        // Marcador luminoso superior
-        if (ledArt != null) g.DrawImage(ledArt, LedRect);
         var st = g.Save(); g.TranslateTransform(LedRect.X, LedRect.Y); DrawMarquee(g, new Rectangle(0, 0, (int)LedRect.Width, (int)LedRect.Height)); g.Restore(st);
-
-        // Contadores de equipo
-        if (counterRedArt != null) g.DrawImage(counterRedArt, RedCounterRect);
-        if (counterBlueArt != null) g.DrawImage(counterBlueArt, BlueCounterRect);
         DrawScore(g, RedCounterRect, redPoints); DrawScore(g, BlueCounterRect, bluePoints);
-
-        // Respuesta, con el logotipo a cada lado
-        DrawOutlined(g, "RESPUESTA", 31, new RectangleF(AnswerBand.X, 96, AnswerBand.Width, 38), Brushes.White, Color.Black, 5f);
-        using (var band = new SolidBrush(Color.FromArgb(244, 244, 244))) g.FillRectangle(band, AnswerBand);
         DrawAnswer(g);
-        DrawZoom(g, logoArt, LeftLogoRect); DrawZoom(g, logoArt, RightLogoRect);
-
-        // Fotos (debajo) y marcos con focos (encima)
-        DrawCover(g, photoA, WindowOf(redFrame, redWin)); DrawCover(g, photoB, WindowOf(blueFrame, blueWin));
-        if (frameRedArt != null) g.DrawImage(frameRedArt, redFrame);
-        if (frameBlueArt != null) g.DrawImage(frameBlueArt, blueFrame);
-        if (plusArt != null) g.DrawImage(plusArt, PlusRect); else DrawOutlined(g, "+", 80, PlusRect, Brushes.Gold, Color.Black, 4f);
 
         // Resplandor del equipo que ganó el pulsador
         if (activeTeam != null)
@@ -191,10 +184,63 @@ public sealed class MainForm : Form
             var fr = red ? redFrame : blueFrame; fr.Inflate(-4, -4); g.DrawRectangle(pen, fr.X, fr.Y, fr.Width, fr.Height);
             var cn = red ? RedCounterRect : BlueCounterRect; cn.Inflate(-2, -2); g.DrawRectangle(pen, cn.X, cn.Y, cn.Width, cn.Height);
         }
-
-        // Barra de botones
-        if (barArt != null) g.DrawImage(barArt, BarRect);
         DrawPressFeedback(g);
+    }
+
+    void RenderStatic(Graphics g, Rectangle cr)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias; g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        var bg = sceneBackground ?? defaultBackground;
+        if (bg != null) g.DrawImage(bg, cr); else g.Clear(orange);
+        float s = Math.Min(cr.Width / DW, cr.Height / DH);
+        g.TranslateTransform((cr.Width - DW * s) / 2f, (cr.Height - DH * s) / 2f); g.ScaleTransform(s, s);
+
+        if (ledArt != null) g.DrawImage(ledArt, LedRect);
+        if (counterRedArt != null) g.DrawImage(counterRedArt, RedCounterRect);
+        if (counterBlueArt != null) g.DrawImage(counterBlueArt, BlueCounterRect);
+
+        DrawOutlined(g, "RESPUESTA", 31, new RectangleF(AnswerBand.X, 96, AnswerBand.Width, 38), Brushes.White, Color.Black, 5f);
+        using (var band = new SolidBrush(Color.FromArgb(244, 244, 244))) g.FillRectangle(band, AnswerBand);
+        DrawZoom(g, logoArt, LeftLogoRect); DrawZoom(g, logoArt, RightLogoRect);
+
+        // Fotos (debajo) y marcos (encima). Los focos del marco solo se encienden para el equipo que pulsó.
+        DrawCover(g, photoA, WindowOf(redFrame, redWin)); DrawCover(g, photoB, WindowOf(blueFrame, blueWin));
+        Bitmap? fRed = activeTeam == "red" ? frameRedArt : (frameRedOff ?? frameRedArt);
+        Bitmap? fBlue = activeTeam == "blue" ? frameBlueArt : (frameBlueOff ?? frameBlueArt);
+        if (fRed != null) g.DrawImage(fRed, redFrame);
+        if (fBlue != null) g.DrawImage(fBlue, blueFrame);
+        if (plusArt != null) g.DrawImage(plusArt, PlusRect); else DrawOutlined(g, "+", 80, PlusRect, Brushes.Gold, Color.Black, 4f);
+
+        if (barArt != null) g.DrawImage(barArt, BarRect);
+    }
+
+    // Copia del marco con los focos apagados (los focos se detectan por su color claro).
+    static Bitmap? MakeBulbsOff(Bitmap? src)
+    {
+        if (src == null) return null;
+        try
+        {
+            var copy = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppPArgb);
+            using (var g = Graphics.FromImage(copy)) { g.CompositingMode = CompositingMode.SourceCopy; g.DrawImage(src, 0, 0, src.Width, src.Height); }
+            var data = copy.LockBits(new Rectangle(0, 0, copy.Width, copy.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppPArgb);
+            try
+            {
+                var buf = new byte[Math.Abs(data.Stride) * copy.Height]; Marshal.Copy(data.Scan0, buf, 0, buf.Length);
+                for (int i = 0; i + 3 < buf.Length; i += 4)
+                {
+                    if (buf[i + 3] < 200) continue;
+                    int b = buf[i], gg = buf[i + 1], r = buf[i + 2];
+                    float w = (Math.Min(Math.Min(r, gg), b + 70) - 105) / 55f; if (w <= 0) continue; if (w > 1) w = 1;
+                    float k = 0.55f + 0.45f * ((r * .3f + gg * .59f + b * .11f) / 255f);
+                    buf[i + 2] = (byte)(r * (1 - w) + 70 * k * w); buf[i + 1] = (byte)(gg * (1 - w) + 58 * k * w); buf[i] = (byte)(b * (1 - w) + 60 * k * w);
+                }
+                Marshal.Copy(buf, 0, data.Scan0, buf.Length);
+            }
+            finally { copy.UnlockBits(data); }
+            return copy;
+        }
+        catch { return null; }
     }
 
     RectangleF HitRect(Hit h) => new(BarRect.X + h.L * BarRect.Width, BarRect.Y + BarRect.Height * 0.12f, (h.R - h.L) * BarRect.Width, BarRect.Height * 0.76f);
@@ -393,16 +439,16 @@ public sealed class MainForm : Form
         finally { bmp.UnlockBits(data); }
     }
 
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdown.Start(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
     void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
-    void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); SetStatus(team == "red" ? "PUNTO PARA EQUIPO ROJO" : "PUNTO PARA EQUIPO AZUL", team); }
+    void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); }
     void RevealAnswer() { answerRevealed = true; answerText = scenes[currentScene].Answer.ToLowerInvariant(); stage.Invalidate(); }
     void ShowScene(int index, bool startTimer)
     {
         if (scenes.Count == 0) return;
         currentScene = ((index % scenes.Count) + scenes.Count) % scenes.Count; var s = scenes[currentScene];
-        Text = "DISEÑO v3 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
+        Text = "DISEÑO v4 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
         answerRevealed = false; answerText = s.Answer;
         var oldA = photoA; var oldB = photoB;
         photoA = LoadPhoto(ResolveAssetPath(s.Image1)); photoB = LoadPhoto(ResolveAssetPath(s.Image2));
@@ -440,7 +486,7 @@ public sealed class MainForm : Form
         var resolved = ResolveAssetPath(path);
         if (string.IsNullOrWhiteSpace(path) && bgFiles.Count > 0) resolved = bgFiles[currentScene % bgFiles.Count];
         if (!string.IsNullOrWhiteSpace(resolved)) sceneBackground = LoadBitmap(resolved);
-        old?.Dispose(); stage.Invalidate();
+        old?.Dispose(); cacheDirty = true; stage.Invalidate();
     }
     void PreviousScene() { if (scenes.Count > 0) ShowScene(currentScene - 1, true); }
     void NextScene() { if (scenes.Count > 0) ShowScene(currentScene + 1, true); }
@@ -601,12 +647,12 @@ public sealed class MainForm : Form
             choose.Click += (_, _) => { var source = Path.Combine(AppContext.BaseDirectory, selectedFile); if (File.Exists(source)) { s.Background = source; if (index == currentScene) SetSceneBackground(source); } else MessageBox.Show(f, "No se encontró " + selectedFile + " junto al programa. Vuelve a compilar la aplicación.", "Fondo no disponible"); };
             panel.Controls.Add(choose);
         }
-        var save = new Button { Text = "GUARDAR ESCENA", Width = 450, Height = 44, BackColor = Color.LimeGreen }; save.Click += (_, _) => { s.Answer = answerBox.Text; if (index == currentScene) ShowScene(index, false); f.Close(); }; panel.Controls.Add(save);
+        var save = new Button { Text = "GUARDAR ESCENA", Width = 450, Height = 44, BackColor = Color.LimeGreen }; save.Click += (_, _) => { s.Answer = answerBox.Text.Trim(); SaveConfig(); if (index == currentScene) ShowScene(index, false); f.Close(); }; panel.Controls.Add(save);
         f.ShowDialog(owner);
     }
     string? PickImage() { using var d = new OpenFileDialog { Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp" }; return d.ShowDialog(this) == DialogResult.OK ? d.FileName : null; }
     string CopyToData(string source, string name) { var dest = Path.Combine(dataDir, name); File.Copy(source, dest, true); return dest; }
-    void SetImageLogo() { var old = logoArt; logoArt = null; if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) logoArt = LoadBitmap(logoPath); old?.Dispose(); stage.Invalidate(); }
+    void SetImageLogo() { var old = logoArt; logoArt = null; if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) logoArt = LoadBitmap(logoPath); old?.Dispose(); cacheDirty = true; stage.Invalidate(); }
     static readonly Dictionary<string, string> SpellFix = new(StringComparer.OrdinalIgnoreCase)
     {
         ["ROMPEXABEZAS"] = "ROMPECABEZAS", ["CANDADDO"] = "CANDADO", ["ARCOIRRIS"] = "ARCOÍRIS", ["CIENPIES"] = "CIEMPIÉS",
@@ -674,7 +720,7 @@ public sealed class MainForm : Form
     void StopAudio() { try { player?.Stop(); } catch { } player?.Dispose(); player = null; audio?.Dispose(); audio = null; }
     void Instructions()
     {
-        instructionsText = "Bienvenidos a Adivina la Palabra con dos Fotos. Presiona Enter para comenzar la cuenta regresiva de diez segundos. El equipo rojo utiliza la tecla " + redBuzzerKey + " y el equipo azul utiliza la tecla " + blueBuzzerKey + ". El primer equipo que presione su pulsador detiene el tiempo y obtiene el turno para responder; la pantalla luminosa cambia al color de ese equipo. El botón Reiniciar Pulsadores libera los pulsadores. El botón Nombre revela la respuesta. Las flechas cambian de escena. Los botones Punto Rojo y Punto Azul suman un punto. Los botones Gana Rojo y Gana Azul muestran al equipo ganador. Los cuatro botones verdes reproducen canciones de celebración y el botón Detener Canción las detiene. La tecla M abre el menú de configuración. ¡Mucha suerte!";
+        instructionsText = "¡Bienvenidos, competidores! En esta prueba verán dos fotografías en la pantalla. Cada foto representa una palabra. Si juntan las dos palabras, formarán una palabra nueva, y esa es la respuesta. Por ejemplo: porta y vasos forman portavasos. Tendrán diez segundos para descubrirla. El equipo rojo y el equipo azul tienen cada uno su pulsador. El primer equipo que lo presione detiene el tiempo, y se encienden las luces de su color. Solo ese equipo podrá decir la respuesta en voz alta. Si aciertan, ganan un punto. Gana el equipo que consiga más puntos. Escuchen con atención, trabajen en equipo, ¡y mucha suerte!";
         if (instructionsScreen.Controls.Count == 0)
         {
             instructionsScreen.Dock = DockStyle.Fill; instructionsScreen.BackColor = Color.FromArgb(22, 22, 34); instructionsScreen.Padding = new Padding(60, 30, 60, 20);
@@ -697,11 +743,26 @@ public sealed class MainForm : Form
         }
         catch { typeTimer.Stop(); instructionsBody.Text = instructionsText; }
     }
+    // Doble clic sobre la franja blanca de la respuesta: corrige el nombre de la escena actual y lo guarda al instante.
+    void EditCurrentAnswer()
+    {
+        if (scenes.Count == 0) return;
+        using var f = new Form { Text = "Corregir respuesta", StartPosition = FormStartPosition.CenterParent, Width = 580, Height = 200, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, BackColor = Color.FromArgb(30, 30, 40) };
+        var lbl = new Label { Text = "Escena " + (currentScene + 1) + ": escribe la respuesta correcta", ForeColor = Color.White, Left = 15, Top = 12, Width = 540 };
+        var tb = new TextBox { Left = 15, Top = 42, Width = 535, Font = new Font("Arial", 16, FontStyle.Bold), Text = scenes[currentScene].Answer };
+        var ok = new Button { Text = "GUARDAR", Left = 15, Top = 95, Width = 260, Height = 42, DialogResult = DialogResult.OK, BackColor = Color.LimeGreen };
+        var cancel = new Button { Text = "CANCELAR", Left = 290, Top = 95, Width = 260, Height = 42, DialogResult = DialogResult.Cancel };
+        f.Controls.AddRange(new Control[] { lbl, tb, ok, cancel }); f.AcceptButton = ok; f.CancelButton = cancel;
+        if (f.ShowDialog(this) != DialogResult.OK) return;
+        var text = tb.Text.Trim(); if (text.Length == 0) return;
+        scenes[currentScene].Answer = text; answerText = answerRevealed ? text.ToLowerInvariant() : text; SaveConfig(); stage.Invalidate();
+    }
     void CloseInstructions() { typeTimer.Stop(); try { speech.SpeakAsyncCancelAll(); } catch { } instructionsScreen.Visible = false; }
     void ExitGame() { if (MessageBox.Show(this, "¿Deseas salir del juego?", "Desafíos Locos", MessageBoxButtons.YesNo) == DialogResult.Yes) Close(); }
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         countdown.Stop(); ledAnimation.Stop(); StopAudio();
+        stageCache?.Dispose(); frameRedOff?.Dispose(); frameBlueOff?.Dispose();
         foreach (var b in new[] { sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB }) b?.Dispose();
         speech.Dispose(); base.OnFormClosed(e);
     }
