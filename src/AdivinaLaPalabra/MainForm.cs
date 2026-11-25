@@ -401,38 +401,76 @@ public sealed class MainForm : Form
     void SetImageLogo() { if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) { var old = logoBox.Image; using var img = Image.FromFile(logoPath); logoBox.Image = new Bitmap(img); old?.Dispose(); } }
     void LoadBundledScenes()
     {
-        // Las imágenes se distribuyen junto al ejecutable. Cada par comparte el número inicial;
-        // el sufijo final 1 o 2 determina el orden de las fotografías.
+        // Las imágenes se distribuyen junto al ejecutable. Cada pareja comparte respuesta;
+        // cuando existe un número repetido, se agrupan por ese número. Las fotos sueltas
+        // (como SALTAMONTES, archivos 29 y 30) se emparejan por la respuesta común.
         var files = Directory.EnumerateFiles(AppContext.BaseDirectory)
             .Where(p => Regex.IsMatch(Path.GetFileName(p), @"^\d+\s+", RegexOptions.IgnoreCase))
             .Where(p => new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
-            .Select(p => new { Path = p, Name = Path.GetFileName(p), Match = Regex.Match(Path.GetFileName(p), @"^(\d+)\s+") })
-            .Where(x => x.Match.Success)
-            .GroupBy(x => int.Parse(x.Match.Groups[1].Value))
-            .OrderBy(g => g.Key);
+            .Select(p => new
+            {
+                Path = p,
+                Name = Path.GetFileName(p),
+                Number = int.Parse(Regex.Match(Path.GetFileName(p), @"^(\d+)\s+").Groups[1].Value)
+            })
+            .GroupBy(x => x.Number)
+            .OrderBy(g => g.Key)
+            .ToArray();
+
+        string ReadAnswer(string name)
+        {
+            var match = Regex.Match(Path.GetFileNameWithoutExtension(name),
+                @"(?:RESPUESTA|REPUETA|RESPUETA)\s*(.+?)(?:\s*[12])?$", RegexOptions.IgnoreCase);
+            return match.Success
+                ? Regex.Replace(match.Groups[1].Value.Trim(), @"\s+", " ").ToUpperInvariant()
+                : "";
+        }
+
+        int PhotoOrder(string name)
+        {
+            var match = Regex.Match(Path.GetFileNameWithoutExtension(name), @"([12])$");
+            return match.Success ? int.Parse(match.Groups[1].Value) : 9;
+        }
+
+        var pending = new List<(int Number, string Answer, string First, string Second)>();
+        var loosePhotos = new List<(int Number, string Name, string Path, string Answer)>();
 
         foreach (var group in files)
         {
-            var pair = group
-                .OrderBy(x =>
-                {
-                    var order = Regex.Match(Path.GetFileNameWithoutExtension(x.Name), @"([12])$");
-                    return order.Success ? int.Parse(order.Groups[1].Value) : 9;
-                })
+            var pair = group.OrderBy(x => PhotoOrder(x.Name))
                 .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            if (pair.Length != 2) continue;
 
-            // La respuesta se toma del nombre de la primera fotografía (sufijo 1).
-            var answerMatch = Regex.Match(Path.GetFileNameWithoutExtension(pair[0].Name),
-                @"(?:RESPUESTA|REPUETA)\s*(.+?)(?:\s*[12])?$", RegexOptions.IgnoreCase);
-            if (!answerMatch.Success) continue;
+            if (pair.Length == 2)
+            {
+                var answer = ReadAnswer(pair[0].Name);
+                if (!string.IsNullOrWhiteSpace(answer))
+                    pending.Add((group.Key, answer, pair[0].Path, pair[1].Path));
+            }
+            else if (pair.Length == 1)
+            {
+                var answer = ReadAnswer(pair[0].Name);
+                if (!string.IsNullOrWhiteSpace(answer))
+                    loosePhotos.Add((group.Key, pair[0].Name, pair[0].Path, answer));
+            }
+        }
 
+        foreach (var looseGroup in loosePhotos.GroupBy(x => x.Answer, StringComparer.OrdinalIgnoreCase))
+        {
+            var pair = looseGroup.OrderBy(x => PhotoOrder(x.Name))
+                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (pair.Length == 2)
+                pending.Add((pair.Min(x => x.Number), looseGroup.Key, pair[0].Path, pair[1].Path));
+        }
+
+        foreach (var scene in pending.OrderBy(x => x.Number))
+        {
             scenes.Add(new Scene
             {
-                Answer = Regex.Replace(answerMatch.Groups[1].Value.Trim(), @"\s+", " ").ToUpperInvariant(),
-                Image1 = pair[0].Path,
-                Image2 = pair[1].Path
+                Answer = scene.Answer,
+                Image1 = scene.First,
+                Image2 = scene.Second
             });
         }
     }
