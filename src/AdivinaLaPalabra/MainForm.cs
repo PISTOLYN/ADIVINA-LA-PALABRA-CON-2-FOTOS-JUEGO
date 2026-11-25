@@ -22,7 +22,7 @@ public sealed class MainForm : Form
     WaveOutEvent? suspensePlayer, effectPlayer;
     AudioFileReader? suspenseReader, effectReader;
     bool musicLoopEnabled;
-    int lastCountdownSoundSecond = 11;
+    int lastCountdownSoundSecond = 21;
     readonly Color orange = Color.FromArgb(239, 57, 8);
     const string DefaultTitle = "ADIVINA LA PALABRA CON 2 FOTOS";
     readonly BufferedPanel stage = new();
@@ -46,7 +46,7 @@ public sealed class MainForm : Form
     string instructionsText = ""; int typedChars;
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P, resetKey = Keys.R;
-    int seconds = 10, redPoints, bluePoints, currentScene, timerDeciseconds;
+    int seconds = 20, redPoints, bluePoints, currentScene, timerDeciseconds;
     bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen, capturingBuzzerKey;
     FormBorderStyle oldBorder;
     Rectangle oldBounds;
@@ -72,15 +72,15 @@ public sealed class MainForm : Form
         ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; if (activeTeam != null || pressedHit != null || DateTime.UtcNow < flashUntil) stage.Invalidate(); }; ledAnimation.Start();
         countdown.Tick += (_, _) =>
         {
-            timerDeciseconds = Math.Min(100, (int)(countdownWatch.ElapsedMilliseconds / 100));
-            seconds = Math.Max(0, 10 - timerDeciseconds / 10);
+            timerDeciseconds = Math.Min(200, (int)(countdownWatch.ElapsedMilliseconds / 100));
+            seconds = Math.Max(0, 20 - timerDeciseconds / 10);
             if (roundActive && activeTeam == null)
             {
                 if (seconds > 0 && seconds != lastCountdownSoundSecond) { lastCountdownSoundSecond = seconds; PlayEffect(countdownEffectPath, defaultCountdownPath); }
                 ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL";
             }
             UpdateClock();
-            if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; PlayEffect(buzzerEffectPath, defaultBuzzerPath); SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); }
+            if (timerDeciseconds >= 200) { countdown.Stop(); roundActive = false; buzzLocked = true; PlayEffect(buzzerEffectPath, defaultBuzzerPath); SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); }
         };
         ShowStartScreen();
     }
@@ -457,9 +457,9 @@ public sealed class MainForm : Form
         finally { bmp.UnlockBits(data); }
     }
 
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; timerDeciseconds = 0; lastCountdownSoundSecond = 11; roundActive = true; buzzLocked = false; PlayEffect(roundStartEffectPath, defaultRoundStartPath); UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = 20; timerDeciseconds = 0; lastCountdownSoundSecond = 21; roundActive = true; buzzLocked = false; PlayEffect(roundStartEffectPath, defaultRoundStartPath); UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); PlayEffect(buzzerEffectPath, defaultBuzzerPath); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
+    void ResetBuzzers() { countdown.Stop(); seconds = 20; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); }
     void RevealAnswer() { answerRevealed = true; answerText = scenes[currentScene].Answer.ToLowerInvariant(); stage.Invalidate(); }
     void ShowScene(int index, bool startTimer)
