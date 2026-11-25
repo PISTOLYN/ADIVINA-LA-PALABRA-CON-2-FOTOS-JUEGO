@@ -1,6 +1,7 @@
 using NAudio.Wave;
 using System.Speech.Synthesis;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace AdivinaLaPalabra;
 
@@ -41,7 +42,8 @@ public sealed class MainForm : Form
         BackColor = orange; ForeColor = Color.White; WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1000, 680); KeyPreview = true; DoubleBuffered = true;
         LoadConfig();
-        if (scenes.Count == 0) scenes.Add(new Scene { Answer = "lavadora" });
+        if (scenes.Count == 0) LoadBundledScenes();
+        if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
         ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; ledPanel.Invalidate(); redPanel.Invalidate(); bluePanel.Invalidate(); }; ledAnimation.Start();
         countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, timerDeciseconds + 1); seconds = Math.Max(0, 10 - timerDeciseconds / 10); UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
@@ -397,6 +399,44 @@ public sealed class MainForm : Form
     string? PickImage() { using var d = new OpenFileDialog { Filter = "Imágenes|*.png;*.jpg;*.jpeg;*.bmp" }; return d.ShowDialog(this) == DialogResult.OK ? d.FileName : null; }
     string CopyToData(string source, string name) { var dest = Path.Combine(dataDir, name); File.Copy(source, dest, true); return dest; }
     void SetImageLogo() { if (!string.IsNullOrWhiteSpace(logoPath) && File.Exists(logoPath)) { var old = logoBox.Image; using var img = Image.FromFile(logoPath); logoBox.Image = new Bitmap(img); old?.Dispose(); } }
+    void LoadBundledScenes()
+    {
+        // Las imágenes se distribuyen junto al ejecutable. Cada par comparte el número inicial;
+        // el sufijo final 1 o 2 determina el orden de las fotografías.
+        var files = Directory.EnumerateFiles(AppContext.BaseDirectory)
+            .Where(p => Regex.IsMatch(Path.GetFileName(p), @"^\d+\s+", RegexOptions.IgnoreCase))
+            .Where(p => new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
+            .Select(p => new { Path = p, Name = Path.GetFileName(p), Match = Regex.Match(Path.GetFileName(p), @"^(\d+)\s+") })
+            .Where(x => x.Match.Success)
+            .GroupBy(x => int.Parse(x.Match.Groups[1].Value))
+            .OrderBy(g => g.Key);
+
+        foreach (var group in files)
+        {
+            var pair = group
+                .OrderBy(x =>
+                {
+                    var order = Regex.Match(Path.GetFileNameWithoutExtension(x.Name), @"([12])$");
+                    return order.Success ? int.Parse(order.Groups[1].Value) : 9;
+                })
+                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (pair.Length != 2) continue;
+
+            // La respuesta se toma del nombre de la primera fotografía (sufijo 1).
+            var answerMatch = Regex.Match(Path.GetFileNameWithoutExtension(pair[0].Name),
+                @"(?:RESPUESTA|REPUETA)\s*(.+?)(?:\s*[12])?$", RegexOptions.IgnoreCase);
+            if (!answerMatch.Success) continue;
+
+            scenes.Add(new Scene
+            {
+                Answer = Regex.Replace(answerMatch.Groups[1].Value.Trim(), @"\s+", " ").ToUpperInvariant(),
+                Image1 = pair[0].Path,
+                Image2 = pair[1].Path
+            });
+        }
+    }
+
     void LoadConfig()
     {
         try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; scenes.Clear(); scenes.AddRange(c.Scenes); }
