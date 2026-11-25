@@ -42,7 +42,14 @@ public sealed class MainForm : Form
         BackColor = orange; ForeColor = Color.White; WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1000, 680); KeyPreview = true; DoubleBuffered = true;
         LoadConfig();
-        if (scenes.Count == 0) LoadBundledScenes();
+        // Si la configuración pertenece a una versión anterior y no contiene fotos accesibles,
+        // vuelve a cargar las parejas incluidas con el juego. Conserva las escenas personalizadas
+        // cuando sus dos fotografías siguen disponibles.
+        if (!scenes.Any(x => File.Exists(ResolveAssetPath(x.Image1)) && File.Exists(ResolveAssetPath(x.Image2))))
+        {
+            scenes.Clear();
+            LoadBundledScenes();
+        }
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
         ledAnimation.Tick += (_, _) => { ledPhase = (ledPhase + 1) % 24; ledPanel.Invalidate(); redPanel.Invalidate(); bluePanel.Invalidate(); }; ledAnimation.Start();
@@ -238,15 +245,25 @@ public sealed class MainForm : Form
         answerRevealed = false; answerLabel.Text = "¿ ? ¿ ?"; SetImage(photo1, s.Image1); SetImage(photo2, s.Image2); SetSceneBackground(s.Background);
         ResetBuzzers(); if (startTimer && started) StartRound();
     }
+    string ResolveAssetPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "";
+        if (File.Exists(path)) return path;
+        // Las escenas integradas guardan solo el nombre del archivo para que funcionen
+        // aunque el programa se instale en otra carpeta o se actualice.
+        return Path.Combine(AppContext.BaseDirectory, Path.GetFileName(path));
+    }
     void SetImage(PictureBox box, string path)
     {
         var old = box.Image; box.Image = null; old?.Dispose();
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { using var img = Image.FromFile(path); box.Image = new Bitmap(img); }
+        var resolved = ResolveAssetPath(path);
+        if (!string.IsNullOrWhiteSpace(resolved) && File.Exists(resolved)) { using var img = Image.FromFile(resolved); box.Image = new Bitmap(img); }
     }
     void SetSceneBackground(string path)
     {
         var old = currentBackground; currentBackground = null; gamePanel.BackgroundImage = null; old?.Dispose();
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) { using var img = Image.FromFile(path); currentBackground = new Bitmap(img); }
+        var resolved = ResolveAssetPath(path);
+        if (!string.IsNullOrWhiteSpace(resolved) && File.Exists(resolved)) { using var img = Image.FromFile(resolved); currentBackground = new Bitmap(img); }
         gamePanel.BackgroundImage = currentBackground;
         if (Controls.Count > 0 && Controls[0] is TableLayoutPanel root) { root.BackgroundImage = currentBackground; root.BackgroundImageLayout = ImageLayout.Stretch; }
         BackgroundImage = currentBackground; BackgroundImageLayout = ImageLayout.Stretch;
@@ -469,8 +486,8 @@ public sealed class MainForm : Form
             scenes.Add(new Scene
             {
                 Answer = scene.Answer,
-                Image1 = scene.First,
-                Image2 = scene.Second
+                Image1 = Path.GetFileName(scene.First),
+                Image2 = Path.GetFileName(scene.Second)
             });
         }
     }
