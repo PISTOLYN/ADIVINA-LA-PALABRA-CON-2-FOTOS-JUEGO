@@ -11,7 +11,7 @@ namespace AdivinaLaPalabra;
 public sealed class MainForm : Form
 {
     sealed class Scene { public string Answer { get; set; } = ""; public string Image1 { get; set; } = ""; public string Image2 { get; set; } = ""; public string Background { get; set; } = ""; }
-    sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; public string ResetKey { get; set; } = "R"; public string SuspenseMusic { get; set; } = ""; public string CountdownEffect { get; set; } = ""; public string RoundStartEffect { get; set; } = ""; public string BuzzerEffect { get; set; } = ""; public string StartImage { get; set; } = ""; public string GameImage { get; set; } = ""; }
+    sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; public string ResetKey { get; set; } = "R"; public string SuspenseMusic { get; set; } = ""; public string CountdownEffect { get; set; } = ""; public string RoundStartEffect { get; set; } = ""; public string BuzzerEffect { get; set; } = ""; public string StartImage { get; set; } = ""; public string GameImage { get; set; } = ""; public int RoundDurationSeconds { get; set; } = 20; }
     sealed class BufferedPanel : Panel { public BufferedPanel() { DoubleBuffered = true; ResizeRedraw = true; SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true); } }
 
     readonly string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesafiosLocos", "AdivinaLaPalabra");
@@ -46,7 +46,7 @@ public sealed class MainForm : Form
     string instructionsText = ""; int typedChars;
     string? winner, logoPath;
     Keys redBuzzerKey = Keys.Q, blueBuzzerKey = Keys.P, resetKey = Keys.R;
-    int seconds = 20, redPoints, bluePoints, currentScene, timerDeciseconds;
+    int seconds = 20, roundDurationSeconds = 20, redPoints, bluePoints, currentScene, timerDeciseconds;
     bool roundActive, buzzLocked = true, answerRevealed, settingsOpen, started, isFullscreen, capturingBuzzerKey;
     FormBorderStyle oldBorder;
     Rectangle oldBounds;
@@ -72,15 +72,15 @@ public sealed class MainForm : Form
         ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; if (activeTeam != null || pressedHit != null || DateTime.UtcNow < flashUntil) stage.Invalidate(); }; ledAnimation.Start();
         countdown.Tick += (_, _) =>
         {
-            timerDeciseconds = Math.Min(200, (int)(countdownWatch.ElapsedMilliseconds / 100));
-            seconds = Math.Max(0, 20 - timerDeciseconds / 10);
+            timerDeciseconds = Math.Min(roundDurationSeconds * 10, (int)(countdownWatch.ElapsedMilliseconds / 100));
+            seconds = Math.Max(0, roundDurationSeconds - timerDeciseconds / 10);
             if (roundActive && activeTeam == null)
             {
                 if (seconds > 0 && seconds != lastCountdownSoundSecond) { lastCountdownSoundSecond = seconds; PlayEffect(countdownEffectPath, defaultCountdownPath); }
                 ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL";
             }
             UpdateClock();
-            if (timerDeciseconds >= 200) { countdown.Stop(); roundActive = false; buzzLocked = true; PlayEffect(buzzerEffectPath, defaultBuzzerPath); SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); }
+            if (timerDeciseconds >= roundDurationSeconds * 10) { countdown.Stop(); roundActive = false; buzzLocked = true; PlayEffect(buzzerEffectPath, defaultBuzzerPath); SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); }
         };
         ShowStartScreen();
     }
@@ -457,9 +457,9 @@ public sealed class MainForm : Form
         finally { bmp.UnlockBits(data); }
     }
 
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 20; timerDeciseconds = 0; lastCountdownSoundSecond = 21; roundActive = true; buzzLocked = false; PlayEffect(roundStartEffectPath, defaultRoundStartPath); UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = roundDurationSeconds; timerDeciseconds = 0; lastCountdownSoundSecond = roundDurationSeconds + 1; roundActive = true; buzzLocked = false; PlayEffect(roundStartEffectPath, defaultRoundStartPath); UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); PlayEffect(buzzerEffectPath, defaultBuzzerPath); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 20; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
+    void ResetBuzzers() { countdown.Stop(); seconds = roundDurationSeconds; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); }
     void RevealAnswer() { answerRevealed = true; answerText = scenes[currentScene].Answer.ToLowerInvariant(); stage.Invalidate(); }
     void ShowScene(int index, bool startTimer)
@@ -558,11 +558,12 @@ public sealed class MainForm : Form
         var musicTab = new TabPage("MÚSICA") { BackColor = f.BackColor, ForeColor = Color.White };
         var soundTab = new TabPage("EFECTOS") { BackColor = f.BackColor, ForeColor = Color.White };
         var screenTab = new TabPage("PANTALLAS") { BackColor = f.BackColor, ForeColor = Color.White };
+        var timeTab = new TabPage("TIEMPO") { BackColor = f.BackColor, ForeColor = Color.White };
         var logoTab = new TabPage("LOGOTIPO") { BackColor = f.BackColor, ForeColor = Color.White };
         var scenesTab = new TabPage("ESCENAS") { BackColor = f.BackColor, ForeColor = Color.White };
         var buzzersTab = new TabPage("PULSADORES") { BackColor = f.BackColor, ForeColor = Color.White };
         var answersTab = new TabPage("CORREGIR RESPUESTAS") { BackColor = f.BackColor, ForeColor = Color.White };
-        tabs.TabPages.AddRange(new[] { musicTab, soundTab, screenTab, logoTab, scenesTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
+        tabs.TabPages.AddRange(new[] { musicTab, soundTab, timeTab, screenTab, logoTab, scenesTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
         var musicPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
         musicTab.Controls.Add(musicPanel);
         musicPanel.Controls.Add(new Label { Text = "ASIGNA UNA CANCIÓN DIFERENTE A CADA BOTÓN VERDE", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(4, 10, 4, 18) });
@@ -583,6 +584,12 @@ public sealed class MainForm : Form
         var resetSounds = new Button { Text = "RESTABLECER SONIDOS PREDETERMINADOS", Width = 660, Height = 44, BackColor = Color.Goldenrod, ForeColor = Color.Black };
         resetSounds.Click += (_, _) => { suspenseMusicPath = countdownEffectPath = roundStartEffectPath = buzzerEffectPath = null; foreach (Control c in soundPanel.Controls) if (c is Button b && b != resetSounds) b.Text = b.Text.Split(" · ")[0] + " · PREDETERMINADO"; };
         soundPanel.Controls.Add(resetSounds);
+        var timePanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(24), WrapContents = false }; timeTab.Controls.Add(timePanel);
+        timePanel.Controls.Add(new Label { Text = "DURACIÓN DE CADA RONDA", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 14), Margin = new Padding(3, 10, 3, 18) });
+        timePanel.Controls.Add(new Label { Text = "Selecciona cuántos segundos tendrán los equipos para presionar su pulsador. El cambio se aplica a la siguiente ronda.", AutoSize = true, MaximumSize = new Size(650, 0), ForeColor = Color.White, Font = new Font("Arial", 11), Margin = new Padding(3, 4, 3, 18) });
+        var durationPicker = new NumericUpDown { Minimum = 5, Maximum = 120, Value = Math.Clamp(roundDurationSeconds, 5, 120), Width = 150, Font = new Font("Arial Black", 20), BackColor = Color.White, ForeColor = Color.Black, Increment = 5 };
+        timePanel.Controls.Add(durationPicker);
+        timePanel.Controls.Add(new Label { Text = "SEGUNDOS (DE 5 A 120)", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 10), Margin = new Padding(3, 8, 3, 18) });
         var screenPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(18), AutoScroll = true, WrapContents = false }; screenTab.Controls.Add(screenPanel);
         screenPanel.Controls.Add(new Label { Text = "PERSONALIZA LAS DOS PANTALLAS DEL JUEGO", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(3, 8, 3, 12) });
         var startImageButton = new Button { Text = "ELEGIR FOTO DE LA PANTALLA INICIAL" + (string.IsNullOrWhiteSpace(startImagePath) ? " · PREDETERMINADA" : " · " + Path.GetFileName(startImagePath)), Width = 660, Height = 52, BackColor = Color.FromArgb(65, 65, 78), ForeColor = Color.White };
@@ -668,7 +675,7 @@ public sealed class MainForm : Form
         answersPanel.Controls.Add(reloadScenes);
         var footer = new Panel { Dock = DockStyle.Bottom, Height = 62, BackColor = Color.FromArgb(18, 18, 24) };
         var saveAll = new Button { Text = "GUARDAR CAMBIOS", Width = 210, Height = 48, Left = 12, Top = 7, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 11) };
-        saveAll.Click += (_, _) => { if (SaveConfig()) MessageBox.Show(f, "¡Todos los cambios se guardaron correctamente!", "Desafíos Locos", MessageBoxButtons.OK, MessageBoxIcon.Information); };
+        saveAll.Click += (_, _) => { roundDurationSeconds = (int)durationPicker.Value; if (SaveConfig()) MessageBox.Show(f, "¡Todos los cambios se guardaron correctamente!", "Desafíos Locos", MessageBoxButtons.OK, MessageBoxIcon.Information); };
         footer.Controls.Add(saveAll);
         var leave = new Button { Text = "SALIR", Width = 150, Height = 48, Left = 230, Top = 7, BackColor = Color.Silver, ForeColor = Color.Black, Font = new Font("Arial Black", 11) };
         leave.Click += (_, _) => { f.Close(); };
@@ -753,12 +760,12 @@ public sealed class MainForm : Form
 
     void LoadConfig()
     {
-        try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; suspenseMusicPath = c.SuspenseMusic; countdownEffectPath = c.CountdownEffect; roundStartEffectPath = c.RoundStartEffect; buzzerEffectPath = c.BuzzerEffect; startImagePath = c.StartImage; gameImagePath = c.GameImage; redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } if (c.Audios != null) for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; if (c.Scenes != null) { scenes.Clear(); scenes.AddRange(c.Scenes); } }
+        try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; suspenseMusicPath = c.SuspenseMusic; countdownEffectPath = c.CountdownEffect; roundStartEffectPath = c.RoundStartEffect; buzzerEffectPath = c.BuzzerEffect; startImagePath = c.StartImage; gameImagePath = c.GameImage; roundDurationSeconds = Math.Clamp(c.RoundDurationSeconds <= 0 ? 20 : c.RoundDurationSeconds, 5, 120); redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } if (c.Audios != null) for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; if (c.Scenes != null) { scenes.Clear(); scenes.AddRange(c.Scenes); } }
         catch { }
     }
     bool SaveConfig()
     {
-        try { var c = new SavedConfig { Logo = logoPath ?? "", Audios = audios.Select(x => x ?? "").ToArray(), Scenes = scenes, RedBuzzerKey = redBuzzerKey.ToString(), BlueBuzzerKey = blueBuzzerKey.ToString(), ResetKey = resetKey.ToString(), SuspenseMusic = suspenseMusicPath ?? "", CountdownEffect = countdownEffectPath ?? "", RoundStartEffect = roundStartEffectPath ?? "", BuzzerEffect = buzzerEffectPath ?? "", StartImage = startImagePath ?? "", GameImage = gameImagePath ?? "" }; File.WriteAllText(Path.Combine(dataDir, "config.json"), JsonSerializer.Serialize(c, new JsonSerializerOptions { WriteIndented = true })); return true; } catch (Exception ex) { MessageBox.Show(this, "No se pudieron guardar los cambios: " + ex.Message, "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
+        try { var c = new SavedConfig { Logo = logoPath ?? "", Audios = audios.Select(x => x ?? "").ToArray(), Scenes = scenes, RedBuzzerKey = redBuzzerKey.ToString(), BlueBuzzerKey = blueBuzzerKey.ToString(), ResetKey = resetKey.ToString(), SuspenseMusic = suspenseMusicPath ?? "", CountdownEffect = countdownEffectPath ?? "", RoundStartEffect = roundStartEffectPath ?? "", BuzzerEffect = buzzerEffectPath ?? "", StartImage = startImagePath ?? "", GameImage = gameImagePath ?? "", RoundDurationSeconds = roundDurationSeconds }; File.WriteAllText(Path.Combine(dataDir, "config.json"), JsonSerializer.Serialize(c, new JsonSerializerOptions { WriteIndented = true })); return true; } catch (Exception ex) { MessageBox.Show(this, "No se pudieron guardar los cambios: " + ex.Message, "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
     }
 
     void EnsureDefaultSoundAssets()
