@@ -1,22 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><ApplicationManifest>app.manifest</ApplicationManifest><AssemblyName>AdivinaLaPalabra</AssemblyName><Version>1.0.0</Version></PropertyGroup>
-<ItemGroup><PackageReference Include="NAudio" Version="2.2.1" /><PackageReference Include="System.Speech" Version="8.0.0" />
-  <Content Include="../../CONTADOR ROJO.png" Link="CONTADOR ROJO.png" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../CONTADOR AZUL.png" Link="CONTADOR AZUL.png" CopyToOutputDirectory="PreserveNewest" />
-</ItemGroup>
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>AdivinaLaPalabra</AssemblyName>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
 
-<ItemGroup>
-  <Content Include="../../FONDO 1.jpg" Link="FONDO 1.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../FONDO 2.jpg" Link="FONDO 2.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../FONDO 3.jpg" Link="FONDO 3.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../FODNO 4.jpg" Link="FODNO 4.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../FONDO 5.jpg" Link="FONDO 5.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../FONDO 6.jpg" Link="FONDO 6.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../CRONOMETRO.png" Link="CRONOMETRO.png" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../BARRA DE BOTONES.jpg" Link="BARRA DE BOTONES.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../PANTALLA LEDS.jpg" Link="PANTALLA LEDS.jpg" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../MARCO ROJO PNG.png" Link="MARCO ROJO PNG.png" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../MARCO AZUL PNG.png" Link="MARCO AZUL PNG.png" CopyToOutputDirectory="PreserveNewest" />
-  <Content Include="../../SIGNO MAS PNG.png" Link="SIGNO MAS PNG.png" CopyToOutputDirectory="PreserveNewest" />
-</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- Copia todas las fotos de las escenas y los recursos gráficos desde la raíz del repositorio. -->
+  <ItemGroup>
+    <Content Include="../../*.png" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../*.jpg" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../*.jpeg" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../*.webp" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
