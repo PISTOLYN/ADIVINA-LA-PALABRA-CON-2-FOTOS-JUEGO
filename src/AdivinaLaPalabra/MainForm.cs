@@ -11,7 +11,7 @@ namespace AdivinaLaPalabra;
 public sealed class MainForm : Form
 {
     sealed class Scene { public string Answer { get; set; } = ""; public string Image1 { get; set; } = ""; public string Image2 { get; set; } = ""; public string Background { get; set; } = ""; }
-    sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; public string ResetKey { get; set; } = "R"; public string BackgroundMusic { get; set; } = ""; public double Volume { get; set; } = 0.7; public string StartImage { get; set; } = ""; }
+    sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; public string ResetKey { get; set; } = "R"; public string BackgroundMusic { get; set; } = ""; public double Volume { get; set; } = 0.7; public string StartImage { get; set; } = ""; public int RoundSeconds { get; set; } = 10; }
     sealed class BufferedPanel : Panel { public BufferedPanel() { DoubleBuffered = true; ResizeRedraw = true; SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true); } }
 
     readonly string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesafiosLocos", "AdivinaLaPalabra");
@@ -29,6 +29,7 @@ public sealed class MainForm : Form
     AudioFileReader? audio;
     Bitmap? sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB;
     string answerText = "";
+    int roundSeconds = 10;
     string? bgMusicPath, startImagePath; double musicVolume = 0.7;
     WaveOutEvent? bgPlayer; AudioFileReader? bgAudio; bool bgLoop;
     string maskText = ""; bool[,]? ledMask; string toastText = ""; DateTime toastUntil;
@@ -67,7 +68,7 @@ public sealed class MainForm : Form
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
         ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; if (activeTeam != null || pressedHit != null || DateTime.UtcNow < flashUntil || DateTime.UtcNow < toastUntil.AddMilliseconds(250)) stage.Invalidate(); }; ledAnimation.Start();
-        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(100, (int)(countdownWatch.ElapsedMilliseconds / 100)); seconds = Math.Max(0, 10 - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= 100) { countdown.Stop(); StopBackgroundMusic(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(roundSeconds * 10, (int)(countdownWatch.ElapsedMilliseconds / 100)); seconds = Math.Max(0, roundSeconds - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= roundSeconds * 10) { countdown.Stop(); StopBackgroundMusic(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
@@ -488,7 +489,7 @@ public sealed class MainForm : Form
         finally { bmp.UnlockBits(data); }
     }
 
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); StartBackgroundMusic(); }
+    void StartRound() { if (!started) return; countdown.Stop(); seconds = roundSeconds; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); StartBackgroundMusic(); }
     void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); StopBackgroundMusic(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
     void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); }
@@ -497,7 +498,7 @@ public sealed class MainForm : Form
     {
         if (scenes.Count == 0) return;
         currentScene = ((index % scenes.Count) + scenes.Count) % scenes.Count; var s = scenes[currentScene];
-        Text = "DISEÑO v5 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
+        Text = "DISEÑO v6 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
         answerRevealed = false; answerText = s.Answer;
         var oldA = photoA; var oldB = photoB;
         photoA = LoadPhoto(ResolveAssetPath(s.Image1)); photoB = LoadPhoto(ResolveAssetPath(s.Image2));
@@ -614,7 +615,8 @@ public sealed class MainForm : Form
         var answersTab = new TabPage("CORREGIR RESPUESTAS") { BackColor = f.BackColor, ForeColor = Color.White };
         var addTab = new TabPage("AGREGAR JUEGO") { BackColor = f.BackColor, ForeColor = Color.White };
         var startTab = new TabPage("PANTALLA DE INICIO") { BackColor = f.BackColor, ForeColor = Color.White };
-        tabs.TabPages.AddRange(new[] { musicTab, startTab, logoTab, scenesTab, addTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
+        var timeTab = new TabPage("TIEMPO") { BackColor = f.BackColor, ForeColor = Color.White };
+        tabs.TabPages.AddRange(new[] { musicTab, timeTab, startTab, logoTab, scenesTab, addTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
         var musicPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
         musicTab.Controls.Add(musicPanel);
         musicPanel.Controls.Add(new Label { Text = "ASIGNA UNA CANCIÓN DIFERENTE A CADA BOTÓN VERDE", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(4, 10, 4, 18) });
@@ -699,6 +701,22 @@ public sealed class MainForm : Form
         var reloadScenes = new Button { Text = "RECARGAR ESCENAS ORIGINALES DEL JUEGO", Width = 540, Height = 40, BackColor = Color.Goldenrod, ForeColor = Color.Black, Font = new Font("Arial Black", 9) };
         reloadScenes.Click += (_, _) => { if (MessageBox.Show(f, "Se borrarán las escenas personalizadas y se cargarán otra vez las incluidas con el juego. ¿Continuar?", "Desafíos Locos", MessageBoxButtons.YesNo) != DialogResult.Yes) return; scenes.Clear(); LoadBundledScenes(); if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" }); SaveConfig(); f.Close(); ShowScene(0, false); OpenSettings(); };
         answersPanel.Controls.Add(reloadScenes);
+        var timePanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
+        timeTab.Controls.Add(timePanel);
+        timePanel.Controls.Add(new Label { Text = "TIEMPO DE CADA RONDA (segundos)", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 13), Margin = new Padding(3, 6, 3, 12) });
+        var timeBox = new NumericUpDown { Minimum = 3, Maximum = 300, Value = Math.Clamp(roundSeconds, 3, 300), Width = 140, Font = new Font("Arial Black", 24) };
+        timeBox.ValueChanged += (_, _) => { roundSeconds = (int)timeBox.Value; SaveConfig(); };
+        timePanel.Controls.Add(timeBox);
+        timePanel.Controls.Add(new Label { Text = "ATAJOS:", AutoSize = true, ForeColor = Color.White, Margin = new Padding(3, 16, 3, 4) });
+        var quick = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Width = 590 };
+        foreach (var sec in new[] { 5, 10, 15, 20, 30, 45, 60 })
+        {
+            int v = sec; var qb = new Button { Text = v + " s", Width = 80, Height = 46, BackColor = Color.FromArgb(65, 65, 78), ForeColor = Color.White, Font = new Font("Arial Black", 10) };
+            qb.Click += (_, _) => timeBox.Value = v; quick.Controls.Add(qb);
+        }
+        timePanel.Controls.Add(quick);
+        timePanel.Controls.Add(new Label { Text = "El cambio se guarda solo y vale desde la siguiente ronda (Enter).", AutoSize = true, ForeColor = Color.White, Margin = new Padding(3, 16, 3, 3) });
+
         var startPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
         startTab.Controls.Add(startPanel);
         startPanel.Controls.Add(new Label { Text = "FOTO DE LA PANTALLA DE INICIO (antes de presionar ENTER)", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(3, 6, 3, 12) });
@@ -827,12 +845,12 @@ public sealed class MainForm : Form
 
     void LoadConfig()
     {
-        try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; bgMusicPath = c.BackgroundMusic; musicVolume = Math.Clamp(c.Volume, 0.0, 1.0); startImagePath = c.StartImage; scenes.Clear(); scenes.AddRange(c.Scenes); }
+        try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; bgMusicPath = c.BackgroundMusic; musicVolume = Math.Clamp(c.Volume, 0.0, 1.0); startImagePath = c.StartImage; roundSeconds = Math.Clamp(c.RoundSeconds, 3, 300); scenes.Clear(); scenes.AddRange(c.Scenes); }
         catch { }
     }
     bool SaveConfig()
     {
-        try { var c = new SavedConfig { Logo = logoPath ?? "", Audios = audios.Select(x => x ?? "").ToArray(), Scenes = scenes, RedBuzzerKey = redBuzzerKey.ToString(), BlueBuzzerKey = blueBuzzerKey.ToString(), ResetKey = resetKey.ToString(), BackgroundMusic = bgMusicPath ?? "", Volume = musicVolume, StartImage = startImagePath ?? "" }; File.WriteAllText(Path.Combine(dataDir, "config.json"), JsonSerializer.Serialize(c, new JsonSerializerOptions { WriteIndented = true })); return true; } catch (Exception ex) { MessageBox.Show(this, "No se pudieron guardar los cambios: " + ex.Message, "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
+        try { var c = new SavedConfig { Logo = logoPath ?? "", Audios = audios.Select(x => x ?? "").ToArray(), Scenes = scenes, RedBuzzerKey = redBuzzerKey.ToString(), BlueBuzzerKey = blueBuzzerKey.ToString(), ResetKey = resetKey.ToString(), BackgroundMusic = bgMusicPath ?? "", Volume = musicVolume, StartImage = startImagePath ?? "", RoundSeconds = roundSeconds }; File.WriteAllText(Path.Combine(dataDir, "config.json"), JsonSerializer.Serialize(c, new JsonSerializerOptions { WriteIndented = true })); return true; } catch (Exception ex) { MessageBox.Show(this, "No se pudieron guardar los cambios: " + ex.Message, "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
     }
 
     // Música de fondo: suena en bucle durante la ronda y se detiene cuando un equipo presiona el pulsador.
@@ -875,7 +893,7 @@ public sealed class MainForm : Form
     void Instructions()
     {
         StopBackgroundMusic();
-        instructionsText = "¡Bienvenidos, competidores! En esta prueba verán dos fotografías en la pantalla. Cada foto representa una palabra. Si juntan las dos palabras, formarán una palabra nueva, y esa es la respuesta. Por ejemplo: porta y vasos forman portavasos. Tendrán diez segundos para descubrirla. El equipo rojo y el equipo azul tienen cada uno su pulsador. El primer equipo que lo presione detiene el tiempo, y se encienden las luces de su color. Solo ese equipo podrá decir la respuesta en voz alta. Si aciertan, ganan un punto. Gana el equipo que consiga más puntos. Escuchen con atención, trabajen en equipo, ¡y mucha suerte!";
+        instructionsText = "¡Bienvenidos, competidores! En esta prueba verán dos fotografías en la pantalla. Cada foto representa una palabra. Si juntan las dos palabras, formarán una palabra nueva, y esa es la respuesta. Por ejemplo: porta y vasos forman portavasos. Tendrán " + roundSeconds + " segundos para descubrirla. El equipo rojo y el equipo azul tienen cada uno su pulsador. El primer equipo que lo presione detiene el tiempo, y se encienden las luces de su color. Solo ese equipo podrá decir la respuesta en voz alta. Si aciertan, ganan un punto. Gana el equipo que consiga más puntos. Escuchen con atención, trabajen en equipo, ¡y mucha suerte!";
         if (instructionsScreen.Controls.Count == 0)
         {
             instructionsScreen.Dock = DockStyle.Fill; instructionsScreen.BackColor = Color.FromArgb(22, 22, 34); instructionsScreen.Padding = new Padding(60, 30, 60, 20);
