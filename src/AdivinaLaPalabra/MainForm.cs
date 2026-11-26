@@ -11,7 +11,7 @@ namespace AdivinaLaPalabra;
 public sealed class MainForm : Form
 {
     sealed class Scene { public string Answer { get; set; } = ""; public string Image1 { get; set; } = ""; public string Image2 { get; set; } = ""; public string Background { get; set; } = ""; }
-    sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; public string ResetKey { get; set; } = "R"; public string BackgroundMusic { get; set; } = ""; public double Volume { get; set; } = 0.7; public string StartImage { get; set; } = ""; public int RoundSeconds { get; set; } = 10; }
+    sealed class SavedConfig { public string[] Audios { get; set; } = new string[4]; public string Logo { get; set; } = ""; public List<Scene> Scenes { get; set; } = new(); public string RedBuzzerKey { get; set; } = "Q"; public string BlueBuzzerKey { get; set; } = "P"; public string ResetKey { get; set; } = "R"; public string BackgroundMusic { get; set; } = ""; public double Volume { get; set; } = 0.7; public string StartImage { get; set; } = ""; public int RoundSeconds { get; set; } = 10; public string FxBuzzer { get; set; } = ""; public string FxTime { get; set; } = ""; public string FxTimeUp { get; set; } = ""; public double FxVolume { get; set; } = 1.0; public string WinRed { get; set; } = ""; public string WinBlue { get; set; } = ""; public Dictionary<string, string> ControlKeys { get; set; } = new(); }
     sealed class BufferedPanel : Panel { public BufferedPanel() { DoubleBuffered = true; ResizeRedraw = true; SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true); } }
 
     readonly string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesafiosLocos", "AdivinaLaPalabra");
@@ -30,6 +30,23 @@ public sealed class MainForm : Form
     Bitmap? sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB;
     string answerText = "";
     int roundSeconds = 10;
+    string? fxBuzzerPath, fxTimePath, fxTimeUpPath, winRedImage, winBlueImage; double fxVolume = 1.0;
+    WaveOutEvent? fxPlayer, tickPlayer; AudioFileReader? fxAudio, tickAudio; bool tickLoop;
+    bool photosHidden = true; Bitmap? winBitmap;
+    readonly Panel pauseScreen = new(); Label? pauseHint;
+    readonly Dictionary<string, Keys> controlKeys = new(); Dictionary<string, string>? savedControlKeys;
+    // Botones de la barra inferior (mismo orden que las zonas de clic): se pueden usar con el mouse o con una tecla.
+    static readonly (string Id, string Label, Keys Def)[] ControlDefs =
+    {
+        ("salir", "SALIR", Keys.None), ("instrucciones", "INSTRUCCIONES DEL JUEGO", Keys.I),
+        ("gana_rojo", "GANA ROJO", Keys.None), ("gana_azul", "GANA AZUL", Keys.None),
+        ("reiniciar", "REINICIAR PULSADORES", Keys.None),
+        ("cel1", "CELEBRACIÓN 1", Keys.D1), ("cel2", "CELEBRACIÓN 2", Keys.D2), ("cel3", "CELEBRACIÓN 3", Keys.D3), ("cel4", "CELEBRACIÓN 4", Keys.D4),
+        ("detener", "DETENER CANCIÓN", Keys.S), ("nombre", "NOMBRE (mostrar respuesta)", Keys.N),
+        ("punto_rojo", "PUNTO ROJO", Keys.F1), ("punto_azul", "PUNTO AZUL", Keys.F2),
+        ("anterior", "ESCENA ANTERIOR", Keys.Left), ("siguiente", "ESCENA SIGUIENTE", Keys.Right),
+    };
+    static string KeyName(Keys k) => k == Keys.None ? "SIN TECLA" : (k >= Keys.D0 && k <= Keys.D9) ? ((int)k - (int)Keys.D0).ToString() : k == Keys.Left ? "← FLECHA IZQUIERDA" : k == Keys.Right ? "→ FLECHA DERECHA" : k.ToString();
     string? bgMusicPath, startImagePath; double musicVolume = 0.7;
     WaveOutEvent? bgPlayer; AudioFileReader? bgAudio; bool bgLoop;
     string maskText = ""; bool[,]? ledMask; string toastText = ""; DateTime toastUntil;
@@ -68,7 +85,7 @@ public sealed class MainForm : Form
         if (scenes.Count == 0) scenes.Add(new Scene { Answer = "AGUAFIESTAS" });
         BuildInterface(); ShowScene(0, false);
         ledAnimation.Tick += (_, _) => { ledTick++; ledPhase = ledTick % 24; if (activeTeam != null || pressedHit != null || DateTime.UtcNow < flashUntil || DateTime.UtcNow < toastUntil.AddMilliseconds(250)) stage.Invalidate(); }; ledAnimation.Start();
-        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(roundSeconds * 10, (int)(countdownWatch.ElapsedMilliseconds / 100)); seconds = Math.Max(0, roundSeconds - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= roundSeconds * 10) { countdown.Stop(); StopBackgroundMusic(); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
+        countdown.Tick += (_, _) => { timerDeciseconds = Math.Min(roundSeconds * 10, (int)(countdownWatch.ElapsedMilliseconds / 100)); seconds = Math.Max(0, roundSeconds - timerDeciseconds / 10); if (roundActive && activeTeam == null) ledMessage = "TIEMPO " + seconds.ToString("00") + "  ·  " + redBuzzerKey + " ROJO | " + blueBuzzerKey + " AZUL"; UpdateClock(); if (timerDeciseconds >= roundSeconds * 10) { countdown.Stop(); StopBackgroundMusic(); StopTick(); PlayEffect(FxPath(fxTimeUpPath, "EFECTO FIN TIEMPO.wav")); roundActive = false; buzzLocked = true; SetStatus("¡TIEMPO! SE ACABÓ LA RONDA", null); } };
         ShowStartScreen();
     }
 
@@ -141,6 +158,8 @@ public sealed class MainForm : Form
             new Hit(.915f, .950f, PreviousScene),
             new Hit(.953f, .985f, NextScene),
         };
+        foreach (var def in ControlDefs)
+            controlKeys[def.Id] = savedControlKeys != null && savedControlKeys.TryGetValue(def.Id, out var sk) && Enum.TryParse<Keys>(sk, out var pk) ? pk : def.Def;
 
         var fullscreen = new Button { Text = "⛶", Width = 54, Height = 32, BackColor = Color.LimeGreen, ForeColor = Color.Black, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right, Font = new Font("Arial Black", 15) };
         fullscreen.Location = new Point(ClientSize.Width - 68, 3); fullscreen.Click += (_, _) => ToggleFullscreen(); Controls.Add(fullscreen); fullscreen.BringToFront();
@@ -220,7 +239,8 @@ public sealed class MainForm : Form
         DrawOutlined(g, "JUEGO " + (currentScene + 1) + " / " + scenes.Count, 30, new RectangleF(505, 226, 415, 44), Brushes.White, Color.Black, 5f);
 
         // Fotos (debajo) y marcos (encima). Los focos del marco solo se encienden para el equipo que pulsó.
-        DrawCover(g, photoA, WindowOf(redFrame, redWin)); DrawCover(g, photoB, WindowOf(blueFrame, blueWin));
+        if (photosHidden) { DrawHiddenWindow(g, WindowOf(redFrame, redWin)); DrawHiddenWindow(g, WindowOf(blueFrame, blueWin)); }
+        else { DrawCover(g, photoA, WindowOf(redFrame, redWin)); DrawCover(g, photoB, WindowOf(blueFrame, blueWin)); }
         if (barArt != null) g.DrawImage(barArt, BarRect);
     }
 
@@ -323,6 +343,12 @@ public sealed class MainForm : Form
     {
         var r = new RectangleF(f.X + f.Width * w.X, f.Y + f.Height * w.Y, f.Width * w.Width, f.Height * w.Height);
         r.Inflate(3, 3); return r;   // un poco más grande para que el marco lo tape sin dejar rendijas
+    }
+    // Mientras no se presione ENTER las fotos no se muestran: solo se ve un signo de interrogación.
+    static void DrawHiddenWindow(Graphics g, RectangleF r)
+    {
+        using (var b = new SolidBrush(Color.FromArgb(255, 22, 22, 30))) g.FillRectangle(b, r);
+        DrawOutlined(g, "?", r.Height * 0.7f, r, Brushes.Gold, Color.Black, 6f);
     }
     static void DrawCover(Graphics g, Image? img, RectangleF dest)
     {
@@ -489,17 +515,17 @@ public sealed class MainForm : Form
         finally { bmp.UnlockBits(data); }
     }
 
-    void StartRound() { if (!started) return; countdown.Stop(); seconds = roundSeconds; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); StartBackgroundMusic(); }
-    void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); StopBackgroundMusic(); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
-    void ResetBuzzers() { countdown.Stop(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
+    void StartRound() { if (!started) return; if (photosHidden) { photosHidden = false; cacheDirty = true; } countdown.Stop(); seconds = roundSeconds; timerDeciseconds = 0; roundActive = true; buzzLocked = false; UpdateClock(); SetStatus("¡LISTOS! " + redBuzzerKey + " = ROJO  |  " + blueBuzzerKey + " = AZUL", null); countdownWatch.Restart(); countdown.Start(); StartBackgroundMusic(); StartTick(); }
+    void Buzz(string team) { if (!started || !roundActive || buzzLocked) return; buzzLocked = true; roundActive = false; countdown.Stop(); StopBackgroundMusic(); StopTick(); PlayEffect(FxPath(fxBuzzerPath, "EFECTO PULSADOR.wav")); SetStatus(team == "red" ? "¡EQUIPO ROJO TIENE EL TURNO PARA RESPONDER!" : "¡EQUIPO AZUL TIENE EL TURNO PARA RESPONDER!", team); }
+    void ResetBuzzers() { countdown.Stop(); StopTick(); StopEffect(); seconds = 10; timerDeciseconds = 0; roundActive = false; buzzLocked = true; UpdateClock(); SetStatus(DefaultTitle, null); }
     void AddPoint(string team) { if (team == "red") redPoints++; else bluePoints++; Scores(); }
     void RevealAnswer() { answerRevealed = true; answerText = scenes[currentScene].Answer.ToLowerInvariant(); stage.Invalidate(); }
     void ShowScene(int index, bool startTimer)
     {
         if (scenes.Count == 0) return;
         currentScene = ((index % scenes.Count) + scenes.Count) % scenes.Count; var s = scenes[currentScene];
-        Text = "DISEÑO v6 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
-        answerRevealed = false; answerText = s.Answer;
+        Text = "DISEÑO v7 - Adivina la Palabra con 2 Fotos  ·  Escena " + (currentScene + 1) + " / " + scenes.Count;
+        answerRevealed = false; answerText = s.Answer; photosHidden = true; cacheDirty = true;
         var oldA = photoA; var oldB = photoB;
         photoA = LoadPhoto(ResolveAssetPath(s.Image1)); photoB = LoadPhoto(ResolveAssetPath(s.Image2));
         oldA?.Dispose(); oldB?.Dispose();
@@ -538,17 +564,17 @@ public sealed class MainForm : Form
         if (!string.IsNullOrWhiteSpace(resolved)) sceneBackground = LoadBitmap(resolved);
         old?.Dispose(); cacheDirty = true; stage.Invalidate();
     }
-    void PreviousScene() { if (scenes.Count > 0) ShowScene(currentScene - 1, true); }
-    void NextScene() { if (scenes.Count > 0) ShowScene(currentScene + 1, true); }
+    void PreviousScene() { if (scenes.Count > 0) ShowScene(currentScene - 1, false); }
+    void NextScene() { if (scenes.Count > 0) ShowScene(currentScene + 1, false); }
     void ShowStartScreen()
     {
         startScreen.Dock = DockStyle.Fill; startScreen.BackColor = Color.FromArgb(235, 50, 8); startScreen.BringToFront();
         var title = new Label { Text = "ADIVINA LA PALABRA\nCON 2 FOTOS", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 42), ForeColor = Color.White };
-        var hint = new Label { Text = "PRESIONA ENTER PARA COMENZAR", Dock = DockStyle.Bottom, Height = 105, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 25), ForeColor = Color.Yellow };
+        var hint = new Label { Text = "PRESIONA ENTER PARA CONTINUAR", Dock = DockStyle.Bottom, Height = 105, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 25), ForeColor = Color.Yellow };
         startScreen.Controls.Add(title); startScreen.Controls.Add(hint); startTitle = title; startHint = hint; ApplyStartImage();
         var splashFullscreen = new Button { Text = "⛶", Width = 54, Height = 32, Left = ClientSize.Width - 66, Top = 5, Anchor = AnchorStyles.Top | AnchorStyles.Right, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 15) };
         splashFullscreen.Click += (_, _) => ToggleFullscreen(); startScreen.Controls.Add(splashFullscreen); splashFullscreen.BringToFront();
-        Controls.Add(startScreen); startScreen.BringToFront();
+        BuildPauseScreen(); Controls.Add(startScreen); startScreen.BringToFront();
     }
     void ApplyStartImage()
     {
@@ -560,15 +586,50 @@ public sealed class MainForm : Form
         if (startHint != null) startHint.BackColor = startBitmap != null ? Color.FromArgb(150, 0, 0, 0) : Color.Transparent;
         old?.Dispose();
     }
-    void BeginGame() { if (started) return; started = true; startScreen.Visible = false; ShowScene(currentScene, true); }
+    // Flujo: bienvenida -> ENTER -> pantalla de pausa (sin fotos; aquí se leen las instrucciones) -> ENTER -> empieza la ronda.
+    void BuildPauseScreen()
+    {
+        pauseScreen.Dock = DockStyle.Fill; pauseScreen.BackColor = Color.FromArgb(235, 50, 8); pauseScreen.Visible = false;
+        var title = new Label { Text = "JUEGO EN PAUSA\nLas fotos aparecerán cuando se presione ENTER", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 36), ForeColor = Color.White };
+        pauseHint = new Label { Dock = DockStyle.Bottom, Height = 70, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 18), ForeColor = Color.Yellow };
+        var bar = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 110, ColumnCount = 2, RowCount = 1, Padding = new Padding(60, 10, 60, 24) };
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        var instr = new Button { Text = "LEER INSTRUCCIONES", Dock = DockStyle.Fill, BackColor = Color.Gold, ForeColor = Color.Black, Font = new Font("Arial Black", 16), FlatStyle = FlatStyle.Flat, Margin = new Padding(8) };
+        instr.Click += (_, _) => Instructions();
+        var go = new Button { Text = "INICIAR JUEGO  (ENTER)", Dock = DockStyle.Fill, BackColor = Color.LimeGreen, ForeColor = Color.Black, Font = new Font("Arial Black", 16), FlatStyle = FlatStyle.Flat, Margin = new Padding(8) };
+        go.Click += (_, _) => BeginGame();
+        bar.Controls.Add(instr, 0, 0); bar.Controls.Add(go, 1, 0);
+        pauseScreen.Controls.Add(title); pauseScreen.Controls.Add(pauseHint); pauseScreen.Controls.Add(bar);
+        Controls.Add(pauseScreen);
+    }
+    void EnterPause()
+    {
+        if (started || pauseScreen.Visible) return;
+        startScreen.Visible = false;
+        if (pauseHint != null) pauseHint.Text = "PRESIONA " + KeyName(controlKeys.TryGetValue("instrucciones", out var ik) ? ik : Keys.I) + " PARA LAS INSTRUCCIONES   ·   ENTER PARA INICIAR";
+        pauseScreen.Visible = true; pauseScreen.BringToFront();
+    }
+    void BeginGame() { if (started) return; started = true; pauseScreen.Visible = false; startScreen.Visible = false; ShowScene(currentScene, true); }
     void ShowWinner(string team)
     {
-        countdown.Stop(); StopBackgroundMusic(); roundActive = false; buzzLocked = true; winner = team;
+        countdown.Stop(); StopBackgroundMusic(); StopTick(); roundActive = false; buzzLocked = true; winner = team;
         winnerScreen.Controls.Clear(); winnerScreen.Dock = DockStyle.Fill; winnerScreen.BackColor = team == "red" ? Color.DarkRed : Color.DarkBlue;
+        var old = winBitmap; winBitmap = null;
+        var imgPath = team == "red" ? winRedImage : winBlueImage;
+        if (!string.IsNullOrWhiteSpace(imgPath) && File.Exists(imgPath)) winBitmap = LoadBitmap(imgPath);
+        winnerScreen.BackgroundImage = winBitmap; winnerScreen.BackgroundImageLayout = ImageLayout.Zoom; old?.Dispose();
+        if (winBitmap != null) winnerScreen.BackColor = Color.Black;
         winnerScreen.Visible = true;
-        var text = new Label { Text = team == "red" ? "¡GANÓ EL EQUIPO ROJO!" : "¡GANÓ EL EQUIPO AZUL!", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", 48), ForeColor = Color.Gold };
+        var text = new Label { Text = team == "red" ? "¡GANÓ EL EQUIPO ROJO!" : "¡GANÓ EL EQUIPO AZUL!", TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Arial Black", winBitmap != null ? 34 : 48), ForeColor = Color.Gold };
+        if (winBitmap != null) { text.Dock = DockStyle.Top; text.Height = 110; text.BackColor = Color.FromArgb(170, 0, 0, 0); } else text.Dock = DockStyle.Fill;
         var close = new Button { Text = "VOLVER AL JUEGO", Dock = DockStyle.Bottom, Height = 75, Font = new Font("Arial Black", 18) }; close.Click += (_, _) => winnerScreen.Visible = false;
         winnerScreen.Controls.Add(text); winnerScreen.Controls.Add(close); Controls.Add(winnerScreen); winnerScreen.BringToFront();
+    }
+    // Ejecuta un botón de la barra con el teclado (con el mismo efecto visual que el clic del mouse).
+    void TriggerControl(int i)
+    {
+        if (i < 0 || i >= barHits.Length) return;
+        flashHit = barHits[i]; flashUntil = DateTime.UtcNow.AddMilliseconds(240); stage.Invalidate(); barHits[i].Act();
     }
     void ToggleFullscreen()
     {
@@ -593,13 +654,19 @@ public sealed class MainForm : Form
         if (key == resetKey) { ResetBuzzers(); return true; }
         if (key == redBuzzerKey) { Buzz("red"); return true; }
         if (key == blueBuzzerKey) { Buzz("blue"); return true; }
-        if (key == Keys.Enter) { if (!started) BeginGame(); else if (!roundActive && buzzLocked) StartRound(); return true; }
+        if (key == Keys.Enter)
+        {
+            if (instructionsScreen.Visible) CloseInstructions();
+            else if (!started) { if (pauseScreen.Visible) BeginGame(); else EnterPause(); }
+            else if (!roundActive && buzzLocked) StartRound();
+            return true;
+        }
         if (key == Keys.Escape) { if (instructionsScreen.Visible) CloseInstructions(); else if (winnerScreen.Visible) winnerScreen.Visible = false; else if (isFullscreen) ToggleFullscreen(); else ResetBuzzers(); return true; }
         if (key == Keys.F11) { ToggleFullscreen(); return true; }
         if (key == Keys.Up) { SetMusicVolume(musicVolume + 0.1); ShowToast("VOLUMEN " + (int)Math.Round(musicVolume * 100) + "%"); SaveConfig(); return true; }
         if (key == Keys.Down) { SetMusicVolume(musicVolume - 0.1); ShowToast("VOLUMEN " + (int)Math.Round(musicVolume * 100) + "%"); SaveConfig(); return true; }
-        if (key == Keys.Left) { PreviousScene(); return true; }
-        if (key == Keys.Right) { NextScene(); return true; }
+        for (int i = 0; i < ControlDefs.Length; i++)
+            if (controlKeys.TryGetValue(ControlDefs[i].Id, out var ck) && ck != Keys.None && key == ck) { TriggerControl(i); return true; }
         return base.ProcessCmdKey(ref msg, key);
     }
 
@@ -616,7 +683,10 @@ public sealed class MainForm : Form
         var addTab = new TabPage("AGREGAR JUEGO") { BackColor = f.BackColor, ForeColor = Color.White };
         var startTab = new TabPage("PANTALLA DE INICIO") { BackColor = f.BackColor, ForeColor = Color.White };
         var timeTab = new TabPage("TIEMPO") { BackColor = f.BackColor, ForeColor = Color.White };
-        tabs.TabPages.AddRange(new[] { musicTab, timeTab, startTab, logoTab, scenesTab, addTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
+        var fxTab = new TabPage("EFECTOS DE SONIDO") { BackColor = f.BackColor, ForeColor = Color.White };
+        var winTab = new TabPage("GANA") { BackColor = f.BackColor, ForeColor = Color.White };
+        var controlsTab = new TabPage("CONTROLES") { BackColor = f.BackColor, ForeColor = Color.White };
+        tabs.TabPages.AddRange(new[] { musicTab, fxTab, timeTab, winTab, controlsTab, startTab, logoTab, scenesTab, addTab, answersTab, buzzersTab }); f.Controls.Add(tabs);
         var musicPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
         musicTab.Controls.Add(musicPanel);
         musicPanel.Controls.Add(new Label { Text = "ASIGNA UNA CANCIÓN DIFERENTE A CADA BOTÓN VERDE", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(4, 10, 4, 18) });
@@ -716,6 +786,77 @@ public sealed class MainForm : Form
         }
         timePanel.Controls.Add(quick);
         timePanel.Controls.Add(new Label { Text = "El cambio se guarda solo y vale desde la siguiente ronda (Enter).", AutoSize = true, ForeColor = Color.White, Margin = new Padding(3, 16, 3, 3) });
+
+        var fxPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(18), AutoScroll = true, WrapContents = false };
+        fxTab.Controls.Add(fxPanel);
+        fxPanel.Controls.Add(new Label { Text = "EFECTOS DE SONIDO", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 13), Margin = new Padding(3, 4, 3, 4) });
+        fxPanel.Controls.Add(new Label { Text = "El juego trae sonidos incluidos. Puedes cambiarlos por tus MP3 o WAV.", AutoSize = true, ForeColor = Color.White });
+        void AddFxRow(string title, string defaultFile, Func<string?> get, Action<string?> set, string saveName)
+        {
+            fxPanel.Controls.Add(new Label { Text = title, AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 10), Margin = new Padding(3, 14, 3, 2) });
+            var row = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
+            var pick = new Button { Text = string.IsNullOrWhiteSpace(get()) ? "SONIDO INCLUIDO (cambiar...)" : "PERSONALIZADO: " + Path.GetFileName(get()), Width = 370, Height = 44, BackColor = Color.Orange, ForeColor = Color.Black };
+            pick.Click += (_, _) => { using var d = new OpenFileDialog { Filter = "Audio|*.mp3;*.wav" }; if (d.ShowDialog(f) == DialogResult.OK) { set(CopyToData(d.FileName, saveName + Path.GetExtension(d.FileName))); pick.Text = "PERSONALIZADO: " + Path.GetFileName(d.FileName); SaveConfig(); } };
+            var test = new Button { Text = "▶ PROBAR", Width = 105, Height = 44, BackColor = Color.LimeGreen, ForeColor = Color.Black };
+            test.Click += (_, _) => PlayEffect(FxPath(get(), defaultFile));
+            var quitar = new Button { Text = "QUITAR", Width = 90, Height = 44, BackColor = Color.Silver, ForeColor = Color.Black };
+            quitar.Click += (_, _) => { set(null); pick.Text = "SONIDO INCLUIDO (cambiar...)"; SaveConfig(); };
+            row.Controls.Add(pick); row.Controls.Add(test); row.Controls.Add(quitar); fxPanel.Controls.Add(row);
+        }
+        AddFxRow("SONIDO DEL PULSADOR (cuando un equipo pulsa)", "EFECTO PULSADOR.wav", () => fxBuzzerPath, v => fxBuzzerPath = v, "efecto-pulsador");
+        AddFxRow("SONIDO DEL TIEMPO (suena durante la cuenta regresiva)", "EFECTO TIEMPO.wav", () => fxTimePath, v => fxTimePath = v, "efecto-tiempo");
+        AddFxRow("SONIDO DE FIN DE TIEMPO (cuando se acaba el tiempo)", "EFECTO FIN TIEMPO.wav", () => fxTimeUpPath, v => fxTimeUpPath = v, "efecto-fin-tiempo");
+        var fxVolLabel = new Label { Text = "VOLUMEN DE LOS EFECTOS: " + (int)Math.Round(fxVolume * 100) + "%", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 10), Margin = new Padding(3, 18, 3, 2) };
+        var fxVol = new TrackBar { Minimum = 0, Maximum = 100, TickFrequency = 10, LargeChange = 10, Width = 570, Value = (int)Math.Round(fxVolume * 100) };
+        fxVol.Scroll += (_, _) => { fxVolume = fxVol.Value / 100.0; fxVolLabel.Text = "VOLUMEN DE LOS EFECTOS: " + fxVol.Value + "%"; SaveConfig(); };
+        fxPanel.Controls.Add(fxVolLabel); fxPanel.Controls.Add(fxVol);
+
+        var winPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
+        winTab.Controls.Add(winPanel);
+        winPanel.Controls.Add(new Label { Text = "FOTO DEL EQUIPO GANADOR (botones GANA)", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 12), Margin = new Padding(3, 6, 3, 8) });
+        winPanel.Controls.Add(new Label { Text = "Esta foto se muestra a pantalla completa cuando presionas GANA ROJO o GANA AZUL.", AutoSize = true, ForeColor = Color.White, Margin = new Padding(3, 0, 3, 10) });
+        void AddWinRow(string label, Color color, Func<string?> get, Action<string?> set, string saveName)
+        {
+            var pick = new Button { Text = string.IsNullOrWhiteSpace(get()) ? "ELEGIR FOTO DEL " + label : "CAMBIAR FOTO DEL " + label, Width = 460, Height = 54, BackColor = color, ForeColor = Color.White, Font = new Font("Arial Black", 10) };
+            pick.Click += (_, _) => { var path = PickImage(); if (path == null) return; set(CopyToData(path, saveName + Path.GetExtension(path))); SaveConfig(); pick.Text = label + ": " + Path.GetFileName(path); };
+            var quitar = new Button { Text = "QUITAR", Width = 110, Height = 54, BackColor = Color.Silver, ForeColor = Color.Black };
+            quitar.Click += (_, _) => { set(""); SaveConfig(); pick.Text = "ELEGIR FOTO DEL " + label; };
+            var row = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 4, 0, 4) };
+            row.Controls.Add(pick); row.Controls.Add(quitar); winPanel.Controls.Add(row);
+        }
+        AddWinRow("EQUIPO ROJO", Color.Firebrick, () => winRedImage, v => winRedImage = v, "gana-rojo");
+        AddWinRow("EQUIPO AZUL", Color.RoyalBlue, () => winBlueImage, v => winBlueImage = v, "gana-azul");
+
+        var ctlPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(14), AutoScroll = true, WrapContents = false };
+        controlsTab.Controls.Add(ctlPanel);
+        ctlPanel.Controls.Add(new Label { Text = "CONTROLES: cada botón de abajo funciona con el mouse y con una tecla", AutoSize = true, ForeColor = Color.Gold, Font = new Font("Arial Black", 11), Margin = new Padding(3, 4, 3, 4) });
+        ctlPanel.Controls.Add(new Label { Text = "Haz clic en el cuadro de un botón y presiona la tecla que quieras. Supr o Esc dejan el botón sin tecla.", AutoSize = true, MaximumSize = new Size(600, 0), ForeColor = Color.White, Margin = new Padding(3, 0, 3, 8) });
+        string? captureId = null; var keyButtons = new Dictionary<string, Button>();
+        foreach (var cdef in ControlDefs)
+        {
+            string cid = cdef.Id;
+            var row = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = false, Margin = new Padding(0, 2, 0, 2) };
+            row.Controls.Add(new Label { Text = cdef.Label, Width = 290, Height = 34, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.White });
+            var kb = new Button { Text = KeyName(controlKeys[cid]), Width = 230, Height = 34, BackColor = Color.FromArgb(65, 65, 78), ForeColor = Color.White, Font = new Font("Arial Black", 9) };
+            kb.Click += (_, _) => { if (captureId != null && keyButtons.TryGetValue(captureId, out var prev)) prev.Text = KeyName(controlKeys[captureId]); captureId = cid; kb.Text = "PRESIONA UNA TECLA..."; };
+            keyButtons[cid] = kb; row.Controls.Add(kb); ctlPanel.Controls.Add(row);
+        }
+        f.KeyPreview = true;
+        f.KeyDown += (_, e) =>
+        {
+            if (captureId == null) return;
+            var k = e.KeyCode; if (k == Keys.ShiftKey || k == Keys.ControlKey || k == Keys.Menu) return;
+            e.Handled = true; e.SuppressKeyPress = true;
+            string cur = captureId; var btn = keyButtons[cur];
+            if (k == Keys.Escape || k == Keys.Delete || k == Keys.Back) controlKeys[cur] = Keys.None;
+            else if (k == Keys.Enter || k == Keys.M || k == Keys.F11 || k == Keys.Up || k == Keys.Down || k == redBuzzerKey || k == blueBuzzerKey || k == resetKey) { btn.Text = "NO DISPONIBLE"; return; }
+            else if (controlKeys.Any(kv => kv.Key != cur && kv.Value == k)) { btn.Text = "YA USADA"; return; }
+            else controlKeys[cur] = k;
+            btn.Text = KeyName(controlKeys[cur]); captureId = null; SaveConfig();
+        };
+        var resetKeys = new Button { Text = "RESTABLECER TECLAS ORIGINALES", Width = 530, Height = 40, BackColor = Color.Goldenrod, ForeColor = Color.Black, Margin = new Padding(3, 12, 3, 3) };
+        resetKeys.Click += (_, _) => { captureId = null; foreach (var cdef in ControlDefs) { controlKeys[cdef.Id] = cdef.Def; keyButtons[cdef.Id].Text = KeyName(cdef.Def); } SaveConfig(); };
+        ctlPanel.Controls.Add(resetKeys);
 
         var startPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(20), WrapContents = false };
         startTab.Controls.Add(startPanel);
@@ -845,13 +986,41 @@ public sealed class MainForm : Form
 
     void LoadConfig()
     {
-        try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; bgMusicPath = c.BackgroundMusic; musicVolume = Math.Clamp(c.Volume, 0.0, 1.0); startImagePath = c.StartImage; roundSeconds = Math.Clamp(c.RoundSeconds, 3, 300); scenes.Clear(); scenes.AddRange(c.Scenes); }
+        try { var path = Path.Combine(dataDir, "config.json"); if (!File.Exists(path)) return; var c = JsonSerializer.Deserialize<SavedConfig>(File.ReadAllText(path)); if (c == null) return; logoPath = c.Logo; redBuzzerKey = Enum.TryParse<Keys>(c.RedBuzzerKey, out var rk) ? rk : Keys.Q; blueBuzzerKey = Enum.TryParse<Keys>(c.BlueBuzzerKey, out var bk) ? bk : Keys.P; resetKey = Enum.TryParse<Keys>(c.ResetKey, out var rr) ? rr : Keys.R; if (redBuzzerKey == blueBuzzerKey || redBuzzerKey == Keys.M || blueBuzzerKey == Keys.M || resetKey == redBuzzerKey || resetKey == blueBuzzerKey || resetKey == Keys.M || resetKey == Keys.Enter) { redBuzzerKey = Keys.Q; blueBuzzerKey = Keys.P; resetKey = Keys.R; } for (int i = 0; i < 4 && i < c.Audios.Length; i++) audios[i] = c.Audios[i]; bgMusicPath = c.BackgroundMusic; musicVolume = Math.Clamp(c.Volume, 0.0, 1.0); startImagePath = c.StartImage; roundSeconds = Math.Clamp(c.RoundSeconds, 3, 300); fxBuzzerPath = c.FxBuzzer; fxTimePath = c.FxTime; fxTimeUpPath = c.FxTimeUp; fxVolume = Math.Clamp(c.FxVolume, 0.0, 1.0); winRedImage = c.WinRed; winBlueImage = c.WinBlue; savedControlKeys = c.ControlKeys; scenes.Clear(); scenes.AddRange(c.Scenes); }
         catch { }
     }
     bool SaveConfig()
     {
-        try { var c = new SavedConfig { Logo = logoPath ?? "", Audios = audios.Select(x => x ?? "").ToArray(), Scenes = scenes, RedBuzzerKey = redBuzzerKey.ToString(), BlueBuzzerKey = blueBuzzerKey.ToString(), ResetKey = resetKey.ToString(), BackgroundMusic = bgMusicPath ?? "", Volume = musicVolume, StartImage = startImagePath ?? "", RoundSeconds = roundSeconds }; File.WriteAllText(Path.Combine(dataDir, "config.json"), JsonSerializer.Serialize(c, new JsonSerializerOptions { WriteIndented = true })); return true; } catch (Exception ex) { MessageBox.Show(this, "No se pudieron guardar los cambios: " + ex.Message, "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
+        try { var c = new SavedConfig { Logo = logoPath ?? "", Audios = audios.Select(x => x ?? "").ToArray(), Scenes = scenes, RedBuzzerKey = redBuzzerKey.ToString(), BlueBuzzerKey = blueBuzzerKey.ToString(), ResetKey = resetKey.ToString(), BackgroundMusic = bgMusicPath ?? "", Volume = musicVolume, StartImage = startImagePath ?? "", RoundSeconds = roundSeconds, FxBuzzer = fxBuzzerPath ?? "", FxTime = fxTimePath ?? "", FxTimeUp = fxTimeUpPath ?? "", FxVolume = fxVolume, WinRed = winRedImage ?? "", WinBlue = winBlueImage ?? "", ControlKeys = controlKeys.ToDictionary(kv => kv.Key, kv => kv.Value.ToString()) }; File.WriteAllText(Path.Combine(dataDir, "config.json"), JsonSerializer.Serialize(c, new JsonSerializerOptions { WriteIndented = true })); return true; } catch (Exception ex) { MessageBox.Show(this, "No se pudieron guardar los cambios: " + ex.Message, "Error al guardar", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
     }
+
+    // Efectos de sonido: pulsador, sonido del tiempo (tic-tac en bucle) y fin del tiempo.
+    string? FxPath(string? custom, string defaultFile)
+    {
+        if (!string.IsNullOrWhiteSpace(custom) && File.Exists(custom)) return custom;
+        var d = Path.Combine(AppContext.BaseDirectory, defaultFile); return File.Exists(d) ? d : null;
+    }
+    void PlayEffect(string? path)
+    {
+        if (path == null) return;
+        try { StopEffect(); fxAudio = new AudioFileReader(path) { Volume = (float)fxVolume }; fxPlayer = new WaveOutEvent(); fxPlayer.Init(fxAudio); fxPlayer.Play(); } catch { StopEffect(); }
+    }
+    void StopEffect() { try { fxPlayer?.Stop(); } catch { } fxPlayer?.Dispose(); fxPlayer = null; fxAudio?.Dispose(); fxAudio = null; }
+    void StartTick()
+    {
+        if (tickPlayer != null && tickLoop) return;
+        StopTick();
+        var path = FxPath(fxTimePath, "EFECTO TIEMPO.wav"); if (path == null) return;
+        try
+        {
+            tickAudio = new AudioFileReader(path) { Volume = (float)fxVolume };
+            var pl = new WaveOutEvent(); pl.Init(tickAudio); tickPlayer = pl; tickLoop = true;
+            pl.PlaybackStopped += (s, _) => { if (tickLoop && ReferenceEquals(tickPlayer, s) && tickAudio != null) { try { tickAudio.Position = 0; pl.Play(); } catch { } } };
+            pl.Play();
+        }
+        catch { StopTick(); }
+    }
+    void StopTick() { tickLoop = false; try { tickPlayer?.Stop(); } catch { } tickPlayer?.Dispose(); tickPlayer = null; tickAudio?.Dispose(); tickAudio = null; }
 
     // Música de fondo: suena en bucle durante la ronda y se detiene cuando un equipo presiona el pulsador.
     string? DefaultMusicPath() { var d = Path.Combine(AppContext.BaseDirectory, "MUSICA DE FONDO.wav"); return File.Exists(d) ? d : null; }
@@ -887,12 +1056,12 @@ public sealed class MainForm : Form
     void PlayCelebration(int n)
     {
         if (string.IsNullOrWhiteSpace(audios[n]) || !File.Exists(audios[n])) { MessageBox.Show(this, "Carga el MP3 de esta celebración desde el menú M.", "Desafíos Locos"); return; }
-        StopBackgroundMusic(); StopAudio(); try { audio = new AudioFileReader(audios[n]!) { Volume = (float)musicVolume }; player = new WaveOutEvent(); player.Init(audio); player.Play(); } catch (Exception ex) { MessageBox.Show(this, "No se pudo reproducir el audio: " + ex.Message); }
+        StopBackgroundMusic(); StopTick(); StopEffect(); StopAudio(); try { audio = new AudioFileReader(audios[n]!) { Volume = (float)musicVolume }; player = new WaveOutEvent(); player.Init(audio); player.Play(); } catch (Exception ex) { MessageBox.Show(this, "No se pudo reproducir el audio: " + ex.Message); }
     }
     void StopAudio() { try { player?.Stop(); } catch { } player?.Dispose(); player = null; audio?.Dispose(); audio = null; }
     void Instructions()
     {
-        StopBackgroundMusic();
+        StopBackgroundMusic(); StopTick(); StopEffect();
         instructionsText = "¡Bienvenidos, competidores! En esta prueba verán dos fotografías en la pantalla. Cada foto representa una palabra. Si juntan las dos palabras, formarán una palabra nueva, y esa es la respuesta. Por ejemplo: porta y vasos forman portavasos. Tendrán " + roundSeconds + " segundos para descubrirla. El equipo rojo y el equipo azul tienen cada uno su pulsador. El primer equipo que lo presione detiene el tiempo, y se encienden las luces de su color. Solo ese equipo podrá decir la respuesta en voz alta. Si aciertan, ganan un punto. Gana el equipo que consiga más puntos. Escuchen con atención, trabajen en equipo, ¡y mucha suerte!";
         if (instructionsScreen.Controls.Count == 0)
         {
@@ -934,7 +1103,7 @@ public sealed class MainForm : Form
     void ExitGame() { if (MessageBox.Show(this, "¿Deseas salir del juego?", "Desafíos Locos", MessageBoxButtons.YesNo) == DialogResult.Yes) Close(); }
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        countdown.Stop(); ledAnimation.Stop(); StopAudio(); StopBackgroundMusic(); startBitmap?.Dispose();
+        countdown.Stop(); ledAnimation.Stop(); StopAudio(); StopBackgroundMusic(); StopTick(); StopEffect(); startBitmap?.Dispose(); winBitmap?.Dispose();
         stageCache?.Dispose(); frameRedOff?.Dispose(); frameBlueOff?.Dispose();
         foreach (var b in new[] { sceneBackground, defaultBackground, ledArt, barArt, counterRedArt, counterBlueArt, frameRedArt, frameBlueArt, plusArt, logoArt, photoA, photoB }) b?.Dispose();
         speech.Dispose(); base.OnFormClosed(e);
